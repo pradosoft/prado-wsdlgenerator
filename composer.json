@@ -24,5 +24,10 @@
 			"email": "weizhuo@gmail.com",
 			"role" : "Developer"
 		}
-	]
+	],
+	"autoload": {
+		"psr-4": {
+			"Prado\\Wsdl": "src"
+		}
+	}
 }
