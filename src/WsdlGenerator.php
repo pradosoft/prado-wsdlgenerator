@@ -92,7 +92,7 @@ class WsdlGenerator
 	{
 		$this->wsdlDocument = new Wsdl($className, $serviceUri, $encoding);
 
-		$classReflect = new ReflectionClass($className);
+		$classReflect = new \ReflectionClass($className);
 		$methods = $classReflect->getMethods();
 
 		foreach ($methods as $method) {
@@ -129,7 +129,7 @@ class WsdlGenerator
 	 * Process a method found in the passed in class.
 	 * @param 		ReflectionMethod		$method		The method to process
 	 */
-	protected function processMethod(ReflectionMethod $method)
+	protected function processMethod(\ReflectionMethod $method)
 	{
 		$comment = $method->getDocComment();
 		if (strpos($comment, '@soapmethod') === false) {
@@ -271,7 +271,7 @@ class WsdlGenerator
 		 * Using Reflection's DocComment to obtain property definitions
 		 * DocComment is available since PHP 5.1
 		 */
-		$reflection = new ReflectionClass($className);
+		$reflection = new \ReflectionClass($className);
 		$properties = $reflection->getProperties();
 		foreach($properties as $property)
 		{

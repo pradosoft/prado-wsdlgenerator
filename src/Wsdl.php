@@ -44,7 +44,6 @@ class Wsdl
 	 */
 	private $types;
 
-
 	/**
 	 * A collection of SOAP operations
 	 * @var 	array
@@ -119,7 +118,7 @@ class Wsdl
 					 xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
                      xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/"></definitions>';
 
-		$dom = new DOMDocument();
+		$dom = new \DOMDocument();
 		$dom->loadXml($xml);
 		$this->definitions = $dom->documentElement;
 
@@ -135,9 +134,9 @@ class Wsdl
 
 	/**
 	 * Adds complexType definitions to the document
-	 * @param		DomDocument 		$dom		The document to add to
+	 * @param		DOMDocument 		$dom		The document to add to
 	 */
-	public function addTypes(DomDocument $dom)
+	public function addTypes(\DOMDocument $dom)
 	{
 		if (!count($this->types)) return;
 		$types = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:types');
@@ -196,9 +195,9 @@ class Wsdl
 
 	/**
 	 * Add messages for the service
-	 * @param		DomDocument 		$dom		The document to add to
+	 * @param		DOMDocument 		$dom		The document to add to
 	 */
-	protected function addMessages(DomDocument $dom)
+	protected function addMessages(\DOMDocument $dom)
 	{
 		foreach ($this->operations as $operation) {
 			$operation->setMessageElements($this->definitions, $dom);
@@ -207,9 +206,9 @@ class Wsdl
 
 	/**
 	 * Add the port types for the service
-	 * @param		DomDocument 		$dom		The document to add to
+	 * @param		DOMDocument 		$dom		The document to add to
 	 */
-	protected function addPortTypes(DOMDocument $dom)
+	protected function addPortTypes(\DOMDocument $dom)
 	{
 		$portType = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:portType');
 		$portType->setAttribute('name', $this->serviceName.'PortType');
@@ -223,9 +222,9 @@ class Wsdl
 
 	/**
 	 * Add the bindings for the service
-	 * @param		DomDocument 		$dom		The document to add to
+	 * @param		DOMDocument 		$dom		The document to add to
 	 */
-	protected function addBindings(DOMDocument $dom)
+	protected function addBindings(\DOMDocument $dom)
 	{
 		$binding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:binding');
 		$binding->setAttribute('name', $this->serviceName.'Binding');
@@ -246,9 +245,9 @@ class Wsdl
 
 	/**
 	 * Add the service definition
-	 * @param		DomDocument 		$dom		The document to add to
+	 * @param		DOMDocument 		$dom		The document to add to
 	 */
-	protected function addService(DomDocument $dom)
+	protected function addService(\DOMDocument $dom)
 	{
 		$service = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:service');
 		$service->setAttribute('name', $this->serviceName.'Service');

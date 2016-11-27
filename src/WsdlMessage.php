@@ -62,7 +62,7 @@ class WsdlMessage
 	 * Return the message as a DOM element
 	 * @param 		DOMDocument		$wsdl		The wsdl document the messages will be children of
 	 */
-	public function getMessageElement(DOMDocument $dom)
+	public function getMessageElement(\DOMDocument $dom)
 	{
 		$message = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:message');
 		$message->setAttribute('name', $this->name);

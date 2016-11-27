@@ -63,10 +63,10 @@ class WsdlOperation
 
 	/**
 	 * Sets the message elements for this operation into the wsdl document
-	 * @param 	DOMElement 		$wsdl		The parent domelement for the messages
-	 * @param 	DomDocument		$dom		The dom document to create the messages as children of
+	 * @param 	\DOMElement 		$wsdl		The parent domelement for the messages
+	 * @param 	\DOMDocument		$dom		The dom document to create the messages as children of
 	 */
-	public function setMessageElements(DOMElement $wsdl, DOMDocument $dom)
+	public function setMessageElements(\DOMElement $wsdl, \DOMDocument $dom)
 	{
 
 		$input = $this->inputMessage->getMessageElement($dom);
@@ -78,10 +78,10 @@ class WsdlOperation
 
 	/**
 	 * Get the port operations for this operation
-	 * @param 	DomDocument		$dom		The dom document to create the messages as children of
-	 * @return 	DomElement					The dom element representing this port.
+	 * @param 	\DOMDocument		$dom		The dom document to create the messages as children of
+	 * @return 	\DOMElement					The dom element representing this port.
 	 */
-	public function getPortOperation(DomDocument $dom)
+	public function getPortOperation(\DOMDocument $dom)
 	{
 		$operation = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:operation');
 		$operation->setAttribute('name', $this->operationName);
@@ -103,11 +103,11 @@ class WsdlOperation
 	 * Build the binding operations.
 	 * TODO: Still quite incomplete with all the things being stuck in, I don't understand
 	 * a lot of it, and it's mostly copied from the output of nusoap's wsdl output.
-	 * @param 	DomDocument		$dom		The dom document to create the binding as children of
+	 * @param 	\DOMDocument		$dom		The dom document to create the binding as children of
 	 * @param 	string			$namespace	The namespace this binding is in.
-	 * @return 	DomElement					The dom element representing this binding.
+	 * @return 	\DOMElement					The dom element representing this binding.
 	 */
-	public function getBindingOperation(DomDocument $dom, $namespace, $style='rpc')
+	public function getBindingOperation(\DOMDocument $dom, $namespace, $style='rpc')
 	{
 		$operation = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:operation');
 		$operation->setAttribute('name', $this->operationName);
