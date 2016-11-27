@@ -40,7 +40,7 @@ class Wsdl
 
 	/**
 	 * The complex types declarations
-	 * @var 	ArrayObject
+	 * @var 	\ArrayObject
 	 */
 	private $types;
 
@@ -93,7 +93,7 @@ class Wsdl
 		$protocol=(isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS']!=='off'))?'https://':'http://';
 		if ($serviceUri === '') $serviceUri = $protocol.$_SERVER['HTTP_HOST'].$_SERVER['PHP_SELF'];
 		$this->serviceUri = str_replace('&amp;', '&', $serviceUri);
-		$this->types = new ArrayObject();
+		$this->types = new \ArrayObject();
 		$this->targetNamespace = 'urn:'.$name.'wsdl';
 	}
 

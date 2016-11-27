@@ -44,7 +44,7 @@ class WsdlGenerator
 
 	/**
 	 * The operations available in this wsdl
-	 * @var 	ArrayObject
+	 * @var 	\ArrayObject
 	 */
 	private $operations;
 
