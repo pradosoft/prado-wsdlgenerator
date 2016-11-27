@@ -1,0 +1,28 @@
+{
+	"name": "pradosoft/prado-wsdlgenerator",
+	"description": "Wsdl generator used in Prado",
+	"homepage": "https://github.com/pradosoft/prado-wsdlgenerator",
+	"license" : "BSD-3-Clause",
+	"authors": [
+		{
+			"name": "Cristian Losada",
+			"email": "cristian@teaxul.com",
+			"role" : "Developer"
+		},
+		{
+			"name": "Fabio Bas",
+			"email": "ctrlaltca@gmail.com",
+			"role" : "Developer"
+		},
+		{
+			"name": "Marcus Nyeholt",
+			"email": "tanus@users.sourceforge.net",
+			"role" : "Developer"
+		},
+		{
+			"name": "Wei Zhuo",
+			"email": "weizhuo@gmail.com",
+			"role" : "Developer"
+		}
+	]
+}
