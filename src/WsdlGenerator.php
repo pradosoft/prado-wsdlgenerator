@@ -153,7 +153,7 @@ class WsdlGenerator
 
 		foreach ($commentLines as $line) {
 			if ($line == '') continue;
-			if ($line{0} == '@') {
+			if ($line[0] == '@') {
 				$gotDesc = true;
 				if (preg_match('/^@param\s+([\w\[\]()]+)\s+\$([\w()]+)\s*(.*)/i', $line, $match)) {
 					$param = array();
