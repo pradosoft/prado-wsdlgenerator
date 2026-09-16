@@ -25,6 +25,13 @@ namespace Prado\Wsdl;
 class WsdlGenerator
 {
 	/**
+	 * The opening of a doc comment tag: the start of a line or the opening of the
+	 * comment, then the asterisks and spaces that lead into the tag. A tag is read
+	 * only in this position, so prose naming one is not a use of it.
+	 */
+	private const TAG_START = '(?:^|\\/\\*\\*)[ \\t*]*@';
+
+	/**
 	 * The singleton instance.
 	 * @var ?WsdlGenerator
 	 */
@@ -138,11 +145,28 @@ class WsdlGenerator
 			return;
 		}
 
-		if (preg_match_all('/(?:^|\/\*\*)[ \t*]*@soaptype\s+(\w+(\[\s*\])?)/mi', $comment, $matches)) {
+		if (preg_match_all('/' . self::TAG_START . 'soaptype\s+(\w+(\[\s*\])?)/mi', $comment, $matches)) {
 			foreach ($matches[1] as $type) {
 				$this->convertType(preg_replace('/\s+/', '', $type));
 			}
 		}
+	}
+
+	/**
+	 * Tells whether a doc comment carries a marker tag in tag position. A tag
+	 * named in prose reads as prose.
+	 * @param false|string $comment The doc comment to read, as reflection returns it
+	 * @param string $tag The tag to look for, without its leading at sign
+	 * @return bool Whether the comment carries the tag
+	 * @since 1.2
+	 */
+	protected static function hasTag($comment, $tag)
+	{
+		if (!is_string($comment)) {
+			return false;
+		}
+
+		return preg_match('/' . self::TAG_START . $tag . '\\b/mi', $comment) === 1;
 	}
 
 	/**
@@ -152,7 +176,7 @@ class WsdlGenerator
 	protected function processMethod(\ReflectionMethod $method)
 	{
 		$comment = $method->getDocComment();
-		if (strpos($comment, '@soapmethod') === false) {
+		if (!self::hasTag($comment, 'soapmethod')) {
 			return;
 		}
 		$comment = preg_replace("/(^[\\s]*\\/\\*\\*)
@@ -295,7 +319,7 @@ class WsdlGenerator
 		$properties = $reflection->getProperties();
 		foreach ($properties as $property) {
 			$comment = $property->getDocComment();
-			if (strpos($comment, '@soapproperty') !== false) {
+			if (self::hasTag($comment, 'soapproperty')) {
 				if (preg_match('/@var\s+([\w\.]+(\[\s*\])?)\s*?\$(.*)$/mi', $comment, $matches)) {
 					// support nillable, minOccurs, maxOccurs attributes
 					$nillable = $minOccurs = $maxOccurs = false;

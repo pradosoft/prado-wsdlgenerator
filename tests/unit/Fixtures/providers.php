@@ -21,7 +21,8 @@ class WsdlTestProvider
 	}
 
 	/**
-	 * Carries no marker tag, so it is not an operation.
+	 * Discusses the @soapmethod tag without carrying it, so it is not an
+	 * operation.
 	 * @return string anything
 	 */
 	public function skipped()
@@ -272,6 +273,8 @@ class WsdlTestUndocumented
 
 /**
  * Names the marker tags in prose without using them as tags.
+ *
+ * @soaptype WsdlTestOneLineType
  */
 class WsdlTestProseMarkerProvider
 {
@@ -280,6 +283,13 @@ class WsdlTestProseMarkerProvider
 	 * @return string anything
 	 */
 	public function discussed()
+	{
+	}
+
+	/** @soapmethod
+	 * @return string anything
+	 */
+	public function oneLineMarker()
 	{
 	}
 }

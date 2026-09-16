@@ -22,10 +22,19 @@ class WsdlTestAddress
 	public $zip;
 
 	/**
-	 * Carries no marker tag, so it stays out of the wsdl.
+	 * Discusses the @soapproperty tag without carrying it, so it stays out of
+	 * the wsdl.
 	 * @var string $internal
 	 */
 	public $internal;
+}
+
+class WsdlTestOneLineType
+{
+	/** @soapproperty
+	 * @var string $a
+	 */
+	public $a;
 }
 
 class WsdlTestPerson

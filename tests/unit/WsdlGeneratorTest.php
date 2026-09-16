@@ -243,14 +243,61 @@ class WsdlGeneratorTest extends WsdlTestCase
 	}
 
 	/**
-	 * The @soapmethod marker is matched anywhere in the doc comment, unlike
-	 * @soaptype, which has to be in tag position. Prose naming the marker
-	 * therefore declares an operation. This pins the behavior as it stands.
+	 * Every marker is read in tag position only, so a doc comment discussing one
+	 * is prose.
 	 */
-	public function testProseNamingTheMethodMarkerDeclaresAnOperation()
+	public function testProseNamingTheMethodMarkerDeclaresNoOperation()
 	{
 		$dom = $this->generate('WsdlTestProseMarkerProvider');
-		$this->assertSame(['discussed'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
+		$this->assertSame(['oneLineMarker'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
+	}
+
+	public function testTheMethodMarkerIsReadFromAOneLineDocComment()
+	{
+		$dom = $this->generate('WsdlTestProseMarkerProvider');
+		$this->assertSame(['return' => 'xsd:string'], $this->parts($dom, 'oneLineMarkerResponse'));
+	}
+
+	public function testProseNamingThePropertyMarkerExportsNoElement()
+	{
+		$dom = $this->generate('WsdlTestNestedProvider');
+		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestAddress']/xsd:all/xsd:element", 'name');
+		$this->assertSame(['street', 'zip'], $elements);
+		$this->assertNotContains('internal', $elements);
+	}
+
+	public function testThePropertyMarkerIsReadFromAOneLineDocComment()
+	{
+		$dom = $this->generate('WsdlTestProseMarkerProvider');
+		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestOneLineType']/xsd:all/xsd:element", 'name');
+		$this->assertSame(['a'], $elements);
+	}
+
+	/**
+	 * @dataProvider markerCommentProvider
+	 * @param string $comment The doc comment to read
+	 * @param bool $expected Whether the comment carries the tag
+	 */
+	public function testHasTagReadsATagOnlyInTagPosition($comment, $expected)
+	{
+		$method = new \ReflectionMethod(WsdlGenerator::class, 'hasTag');
+		$method->setAccessible(true);
+		$this->assertSame($expected, $method->invoke(null, $comment, 'soapmethod'));
+	}
+
+	public static function markerCommentProvider()
+	{
+		return [
+			'on its own line' => ["/**\n * @soapmethod\n */", true],
+			'opening the comment' => ['/** @soapmethod */', true],
+			'leading tabs' => ["/**\n\t * @soapmethod\n\t */", true],
+			'with other tags' => ["/**\n * Does a thing.\n * @soapmethod\n * @return string x\n */", true],
+			'named in prose' => ['/** Discusses the @soapmethod tag. */', false],
+			'mid sentence' => ["/**\n * Use the @soapmethod tag here.\n */", false],
+			'a longer tag' => ["/**\n * @soapmethods\n */", false],
+			'absent' => ["/**\n * Does a thing.\n */", false],
+			'no doc comment' => [false, false],
+		];
 	}
 
 	public function testProcessTypeTagsIgnoresAClassWithoutADocComment()
