@@ -84,19 +84,82 @@ class WsdlOperation
 	}
 
 	/**
-	 * Sets the message elements for this operation into the wsdl document.
+	 * The binding style the operation is written for.
+	 * @var string
+	 */
+	private string $bindingStyle = Wsdl::STYLE_RPC;
+
+	/**
+	 * Sets the binding style the operation is written for. The style is carried
+	 * rather than passed, so the signature of {@see setMessageElements} is the one
+	 * it has always had.
+	 * @param string $value The binding style
+	 * @return void
+	 * @since 1.2
+	 */
+	public function setBindingStyle($value)
+	{
+		$this->bindingStyle = $value;
+	}
+
+	/**
+	 * Gets the binding style the operation is written for.
+	 * @return string The binding style
+	 * @since 1.2
+	 */
+	public function getBindingStyle()
+	{
+		return $this->bindingStyle;
+	}
+
+	/**
+	 * Gets the name of the operation.
+	 * @return string The name
+	 * @since 1.2
+	 */
+	public function getName()
+	{
+		return $this->operationName;
+	}
+
+	/**
+	 * Gets the request message of the operation.
+	 * @return ?WsdlMessage The request message
+	 * @since 1.2
+	 */
+	public function getInputMessage()
+	{
+		return $this->inputMessage;
+	}
+
+	/**
+	 * Gets the response message of the operation.
+	 * @return ?WsdlMessage The response message
+	 * @since 1.2
+	 */
+	public function getOutputMessage()
+	{
+		return $this->outputMessage;
+	}
+
+	/**
+	 * Sets the message elements for this operation into the wsdl document. A
+	 * document and literal message names the global element wrapping its parts,
+	 * where an rpc message carries one part per parameter.
 	 * @param \DOMElement $wsdl The parent element for the messages
 	 * @param \DOMDocument $dom The document the messages are created in
 	 * @return void
 	 */
 	public function setMessageElements(\DOMElement $wsdl, \DOMDocument $dom)
 	{
+		if ($this->bindingStyle === Wsdl::STYLE_DOCUMENT) {
+			$wsdl->appendChild($this->inputMessage->getDocumentMessageElement($dom, $this->operationName));
+			$wsdl->appendChild($this->outputMessage->getDocumentMessageElement($dom, $this->operationName . 'Response'));
+			return;
+		}
 
-		$input = $this->inputMessage->getMessageElement($dom);
-		$output = $this->outputMessage->getMessageElement($dom);
-
-		$wsdl->appendChild($input);
-		$wsdl->appendChild($output);
+		$wsdl->appendChild($this->inputMessage->getMessageElement($dom));
+		$wsdl->appendChild($this->outputMessage->getMessageElement($dom));
 	}
 
 	/**
@@ -145,9 +208,14 @@ class WsdlOperation
 		$output = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:output');
 
 		$soapBody = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:body');
-		$soapBody->setAttribute('use', 'encoded');
-		$soapBody->setAttribute('namespace', $namespace);
-		$soapBody->setAttribute('encodingStyle', 'http://schemas.xmlsoap.org/soap/encoding/');
+		if ($style === Wsdl::STYLE_DOCUMENT) {
+			// The Basic Profile prohibits SOAP encoding, and an encodingStyle with it.
+			$soapBody->setAttribute('use', 'literal');
+		} else {
+			$soapBody->setAttribute('use', 'encoded');
+			$soapBody->setAttribute('namespace', $namespace);
+			$soapBody->setAttribute('encodingStyle', 'http://schemas.xmlsoap.org/soap/encoding/');
+		}
 		$input->appendChild($soapBody);
 		$output->appendChild(clone $soapBody);
 

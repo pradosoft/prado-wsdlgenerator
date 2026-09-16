@@ -109,6 +109,29 @@ class WsdlOperationTest extends WsdlTestCase
 		$this->assertSame('', $dom->documentElement->getAttribute('name'));
 	}
 
+	public function testTheStyleDefaultsToRpcAndIsSettable(): void
+	{
+		$operation = $this->newOperation();
+		$this->assertSame(\Prado\Wsdl\Wsdl::STYLE_RPC, $operation->getBindingStyle());
+
+		$operation->setBindingStyle(\Prado\Wsdl\Wsdl::STYLE_DOCUMENT);
+		$this->assertSame(\Prado\Wsdl\Wsdl::STYLE_DOCUMENT, $operation->getBindingStyle());
+	}
+
+	public function testADocumentStyleMessageNamesAnElement(): void
+	{
+		$operation = $this->newOperation();
+		$operation->setBindingStyle(\Prado\Wsdl\Wsdl::STYLE_DOCUMENT);
+
+		$dom = new DOMDocument();
+		$definitions = $dom->createElementNS(self::WSDL_NS, 'wsdl:definitions');
+		$dom->appendChild($definitions);
+		$operation->setMessageElements($definitions, $dom);
+
+		$this->assertSame(['parameters', 'parameters'], $this->attributes($dom, '//wsdl:part', 'name'));
+		$this->assertSame(['tns:op', 'tns:opResponse'], $this->attributes($dom, '//wsdl:part', 'element'));
+	}
+
 	public function testSetMessageElementsAppendsBothMessages(): void
 	{
 		$dom = new DOMDocument();

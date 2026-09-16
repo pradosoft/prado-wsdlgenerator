@@ -65,6 +65,12 @@ class WsdlGenerator
 	private string $wsdl = '';
 
 	/**
+	 * The binding style the document follows.
+	 * @var string
+	 */
+	private string $style = Wsdl::STYLE_RPC;
+
+	/**
 	 * The singleton instance for the generator
 	 * @return WsdlGenerator The instance
 	 */
@@ -74,6 +80,29 @@ class WsdlGenerator
 			self::$instance = new WsdlGenerator();
 		}
 		return self::$instance;
+	}
+
+	/**
+	 * Sets the binding style the generated document follows. The style is carried
+	 * rather than passed, so the signature of {@see generateWsdl} is the one it has
+	 * always had.
+	 * @param string $value {@see Wsdl::STYLE_RPC} or {@see Wsdl::STYLE_DOCUMENT}
+	 * @return void
+	 * @since 1.2
+	 */
+	public function setStyle($value)
+	{
+		$this->style = $value;
+	}
+
+	/**
+	 * Gets the binding style the generated document follows.
+	 * @return string The binding style
+	 * @since 1.2
+	 */
+	public function getStyle()
+	{
+		return $this->style;
 	}
 
 	/**
@@ -87,7 +116,8 @@ class WsdlGenerator
 
 	/**
 	 * Generates WSDL for a passed in class, and saves it in the current object. The
-	 * WSDL can then be retrieved by calling
+	 * WSDL can then be retrieved by calling {@see getWsdl}. The document follows
+	 * the style {@see setStyle} carries.
 	 * @param string $className The name of the class to generate for
 	 * @param string $serviceUri The URI of the service that handles this WSDL
 	 * @param string $encoding character encoding.
@@ -97,7 +127,7 @@ class WsdlGenerator
 	{
 		$this->types = [];
 		$this->wsdl = '';
-		$this->wsdlDocument = new Wsdl($className, $serviceUri, $encoding);
+		$this->wsdlDocument = new Wsdl($className, $serviceUri, $encoding, $this->style);
 
 		$classReflect = new \ReflectionClass($className);
 		$this->processTypeTags($classReflect);
@@ -122,11 +152,13 @@ class WsdlGenerator
 	 * @param string $className The name of the class to export
 	 * @param string $serviceUri The URI of the service that handles this WSDL
 	 * @param string $encoding character encoding.
+	 * @param mixed $style
 	 * @return string The generated wsdl
 	 */
-	public static function generate($className, $serviceUri = '', $encoding = '')
+	public static function generate($className, $serviceUri = '', $encoding = '', $style = Wsdl::STYLE_RPC)
 	{
 		$generator = WsdlGenerator::getInstance();
+		$generator->setStyle($style);
 		$generator->generateWsdl($className, $serviceUri, $encoding);
 		//header('Content-type: text/xml');
 		return $generator->getWsdl();
@@ -288,9 +320,10 @@ class WsdlGenerator
 			case 'dateTime':
 				return 'xsd:dateTime';
 			case 'array':
-				return 'soap-enc:Array';
+				// SOAP encoding, and so soap-enc:Array, is prohibited in literal.
+				return $this->style === Wsdl::STYLE_DOCUMENT ? 'xsd:anyType' : 'soap-enc:Array';
 			case 'object':
-				return 'xsd:struct';
+				return 'xsd:anyType';
 			case 'mixed':
 				return 'xsd:anyType';
 			case 'void':
@@ -341,7 +374,7 @@ class WsdlGenerator
 								} elseif (strcasecmp($prop, 'minOccurs') === 0) {
 									$minOccurs = (int) $attr[3][$id];
 								} elseif (strcasecmp($prop, 'maxOccurs') === 0) {
-									$maxOccurs = (int) $attr[3][$id];
+									$maxOccurs = strcasecmp($attr[3][$id], 'unbounded') === 0 ? 'unbounded' : (int) $attr[3][$id];
 								}
 							}
 						}

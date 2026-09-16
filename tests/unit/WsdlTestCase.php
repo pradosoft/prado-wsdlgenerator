@@ -8,6 +8,7 @@ use DOMNode;
 use DOMNodeList;
 use DOMXPath;
 use PHPUnit\Framework\TestCase;
+use Prado\Wsdl\Wsdl;
 use Prado\Wsdl\WsdlGenerator;
 
 /**
@@ -23,11 +24,13 @@ abstract class WsdlTestCase extends TestCase
 	 * Generates the wsdl of a provider and parses it.
 	 * @param string $className The provider to generate for
 	 * @param string $serviceUri The service URI to write into the document
+	 * @param string $style The binding style to generate
 	 * @return DOMDocument The parsed document
 	 */
-	protected function generate($className, $serviceUri = 'http://example.com/soap')
+	protected function generate($className, $serviceUri = 'http://example.com/soap', $style = Wsdl::STYLE_RPC)
 	{
 		$generator = new WsdlGenerator();
+		$generator->setStyle($style);
 		$generator->generateWsdl($className, $serviceUri, 'UTF-8');
 
 		$dom = new DOMDocument();
@@ -68,13 +71,14 @@ abstract class WsdlTestCase extends TestCase
 	}
 
 	/**
-	 * Names the complexTypes a document declares.
+	 * Names the complexTypes a document declares by name.
 	 * @param DOMDocument $dom The document to read
 	 * @return array<int, string> The complexType names, in document order
 	 */
 	protected function complexTypes(DOMDocument $dom)
 	{
-		return $this->attributes($dom, '//xsd:complexType', 'name');
+		// A wrapper element holds an anonymous complexType, which names nothing.
+		return $this->attributes($dom, '//xsd:complexType[@name]', 'name');
 	}
 
 	/**
@@ -94,9 +98,25 @@ abstract class WsdlTestCase extends TestCase
 	}
 
 	/**
-	 * Asserts that every type a schema element or a message part names in the
-	 * target namespace is a type the document also declares. A dangling
-	 * reference is well formed, and a schema validator rejects it.
+	 * The built-in types of XML Schema 1.0, which is every name a document may
+	 * carry under the xsd prefix.
+	 */
+	public const XSD_TYPES = [
+		'anyType', 'anySimpleType', 'string', 'boolean', 'decimal', 'float', 'double',
+		'duration', 'dateTime', 'time', 'date', 'gYearMonth', 'gYear', 'gMonthDay',
+		'gDay', 'gMonth', 'hexBinary', 'base64Binary', 'anyURI', 'QName', 'NOTATION',
+		'normalizedString', 'token', 'language', 'NMTOKEN', 'NMTOKENS', 'Name',
+		'NCName', 'ID', 'IDREF', 'IDREFS', 'ENTITY', 'ENTITIES', 'integer',
+		'nonPositiveInteger', 'negativeInteger', 'long', 'int', 'short', 'byte',
+		'nonNegativeInteger', 'unsignedLong', 'unsignedInt', 'unsignedShort',
+		'unsignedByte', 'positiveInteger',
+	];
+
+	/**
+	 * Asserts that every type a schema element or a message part names resolves:
+	 * a type in the target namespace is one the document declares, and a type
+	 * under the xsd prefix is one XML Schema defines. A dangling reference is
+	 * well formed, and a schema validator rejects it.
 	 * @param DOMDocument $dom The document to check
 	 * @return void
 	 */
@@ -107,10 +127,11 @@ abstract class WsdlTestCase extends TestCase
 		foreach ($this->query($dom, '//xsd:element[@type] | //wsdl:part[@type]') as $node) {
 			$this->assertInstanceOf(DOMElement::class, $node);
 			$type = $node->getAttribute('type');
-			if (!str_starts_with($type, 'tns:')) {
-				continue;
+			if (str_starts_with($type, 'tns:')) {
+				$this->assertContains(substr($type, 4), $declared, $type . ' names a type the document declares');
+			} elseif (str_starts_with($type, 'xsd:')) {
+				$this->assertContains(substr($type, 4), self::XSD_TYPES, $type . ' names a type XML Schema defines');
 			}
-			$this->assertContains(substr($type, 4), $declared, $type . ' names a type the document declares');
 		}
 	}
 
@@ -127,6 +148,60 @@ abstract class WsdlTestCase extends TestCase
 		$node = $this->query($dom, $query)->item(0);
 		$this->assertInstanceOf(DOMElement::class, $node, $query . ' matches an element');
 		return $node;
+	}
+
+	/**
+	 * Asserts that the schema a document carries compiles. A schema is only
+	 * resolved where it is used, so every complexType is referenced by a global
+	 * element first. This catches a type that does not exist, an occurrence count
+	 * the compositor forbids, and a reference to a type nothing declares.
+	 * @param DOMDocument $dom The document to check
+	 * @return void
+	 */
+	protected function assertSchemaCompiles(DOMDocument $dom)
+	{
+		$schema = $dom->getElementsByTagNameNS(self::XSD_NS, 'schema')->item(0);
+		if ($schema === null) {
+			return;
+		}
+
+		$out = new DOMDocument();
+		$copy = $out->importNode($schema, true);
+		$this->assertInstanceOf(DOMElement::class, $copy);
+		$out->appendChild($copy);
+		$copy->setAttributeNS(
+			'http://www.w3.org/2000/xmlns/',
+			'xmlns:tns',
+			$dom->documentElement->getAttribute('targetNamespace')
+		);
+
+		foreach ($this->complexTypes($dom) as $index => $type) {
+			$probe = $out->createElementNS(self::XSD_NS, 'xsd:element');
+			$probe->setAttribute('name', 'probe' . $index);
+			$probe->setAttribute('type', 'tns:' . $type);
+			$copy->appendChild($probe);
+		}
+
+		$previous = libxml_use_internal_errors(true);
+		libxml_clear_errors();
+
+		try {
+			$probe = new DOMDocument();
+			$probe->loadXML('<probe/>');
+			@$probe->schemaValidateSource($out->saveXML());
+			$fatal = [];
+			foreach (libxml_get_errors() as $error) {
+				$message = trim($error->message);
+				if (str_contains($message, 'resolv') || str_contains($message, 'Invalid') || str_contains($message, 'not allowed')) {
+					$fatal[] = $message;
+				}
+			}
+		} finally {
+			libxml_clear_errors();
+			libxml_use_internal_errors($previous);
+		}
+
+		$this->assertSame([], array_values(array_unique($fatal)), 'the schema compiles');
 	}
 
 	/**

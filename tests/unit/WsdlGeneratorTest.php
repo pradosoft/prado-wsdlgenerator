@@ -2,6 +2,7 @@
 
 namespace Prado\Wsdl\Test\Unit;
 
+use Prado\Wsdl\Wsdl;
 use Prado\Wsdl\WsdlGenerator;
 use ReflectionClass;
 use ReflectionException;
@@ -70,7 +71,7 @@ class WsdlGeneratorTest extends WsdlTestCase
 			'b' => 'xsd:time',
 			'c' => 'xsd:dateTime',
 			'd' => 'soap-enc:Array',
-			'e' => 'xsd:struct',
+			'e' => 'xsd:anyType',
 			'f' => 'xsd:anyType',
 		], $this->parts($dom, 'othersRequest'));
 	}
@@ -78,14 +79,14 @@ class WsdlGeneratorTest extends WsdlTestCase
 	public function testSoapPropertiesBecomeComplexTypeElements(): void
 	{
 		$dom = $this->generate('WsdlTestNestedProvider');
-		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestAddress']/xsd:all/xsd:element", 'name');
+		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestAddress']/*/xsd:element", 'name');
 		$this->assertSame(['street', 'zip'], $elements, 'a property without @soapproperty is left out');
 	}
 
 	public function testSoapPropertyAttributesReachTheElement(): void
 	{
 		$dom = $this->generate('WsdlTestNestedProvider');
-		$zip = $this->element($dom, "//xsd:complexType[@name='WsdlTestAddress']/xsd:all/xsd:element[@name='zip']");
+		$zip = $this->element($dom, "//xsd:complexType[@name='WsdlTestAddress']/*/xsd:element[@name='zip']");
 		$this->assertSame('xsd:int', $zip->getAttribute('type'));
 		$this->assertSame('true', $zip->getAttribute('nillable'));
 		$this->assertSame('0', $zip->getAttribute('minOccurs'));
@@ -230,6 +231,129 @@ class WsdlGeneratorTest extends WsdlTestCase
 	}
 
 	/**
+	 * @dataProvider providerNameProvider
+	 * @param string $className The provider to generate for
+	 */
+	public function testTheSchemaOfAGeneratedDocumentCompiles($className): void
+	{
+		$this->assertSchemaCompiles($this->generate($className));
+	}
+
+	/**
+	 * @dataProvider providerNameProvider
+	 * @param string $className The provider to generate for
+	 */
+	public function testTheSchemaOfADocumentStyleDocumentCompiles($className): void
+	{
+		$dom = $this->generate($className, 'http://example.com/soap', Wsdl::STYLE_DOCUMENT);
+		$this->assertSchemaCompiles($dom);
+		$this->assertEveryLocalTypeResolves($dom);
+	}
+
+	/**
+	 * The Basic Profile requires a literal body and one part naming an element
+	 * (R2201, R2706), and prohibits an encodingStyle with it (R2716).
+	 *
+	 * @dataProvider providerNameProvider
+	 * @param string $className The provider to generate for
+	 */
+	public function testADocumentStyleDocumentFollowsTheBasicProfile($className): void
+	{
+		$dom = $this->generate($className, 'http://example.com/soap', Wsdl::STYLE_DOCUMENT);
+
+		$this->assertSame(['document'], $this->attributes($dom, '//soap:binding', 'style'));
+
+		foreach ($this->query($dom, '//soap:body') as $body) {
+			$this->assertInstanceOf(\DOMElement::class, $body);
+			$this->assertSame('literal', $body->getAttribute('use'));
+			$this->assertFalse($body->hasAttribute('encodingStyle'));
+			$this->assertFalse($body->hasAttribute('namespace'));
+		}
+
+		$declared = $this->attributes($dom, '//xsd:schema/xsd:element', 'name');
+		foreach ($this->query($dom, '//wsdl:message') as $message) {
+			$this->assertInstanceOf(\DOMElement::class, $message);
+			$parts = $message->getElementsByTagNameNS(self::WSDL_NS, 'part');
+			$this->assertCount(1, $parts, $message->getAttribute('name') . ' carries one part');
+
+			$part = $parts->item(0);
+			$this->assertInstanceOf(\DOMElement::class, $part);
+			$this->assertFalse($part->hasAttribute('type'), 'the part names an element, not a type');
+			$this->assertContains(substr($part->getAttribute('element'), 4), $declared);
+		}
+	}
+
+	public function testTheRequestElementCarriesTheParameters(): void
+	{
+		$dom = $this->generate('WsdlTestProvider', 'http://example.com/soap', Wsdl::STYLE_DOCUMENT);
+
+		$parameters = $this->attributes($dom, "//xsd:element[@name='add']/xsd:complexType/xsd:sequence/xsd:element", 'name');
+		$this->assertSame(['a', 'b'], $parameters);
+
+		$returns = $this->attributes($dom, "//xsd:element[@name='addResponse']/xsd:complexType/xsd:sequence/xsd:element", 'type');
+		$this->assertSame(['xsd:int'], $returns);
+	}
+
+	public function testAVoidReturnWrapsAnEmptyResponseElement(): void
+	{
+		$dom = $this->generate('WsdlTestVoidProvider', 'http://example.com/soap', Wsdl::STYLE_DOCUMENT);
+
+		$this->assertCount(1, $this->query($dom, "//xsd:element[@name='doThingResponse']"));
+		$this->assertCount(0, $this->query($dom, "//xsd:element[@name='doThingResponse']//xsd:element"));
+	}
+
+	/**
+	 * SOAP encoding is prohibited in literal, so soap-enc:Array cannot be named.
+	 */
+	public function testAnUntypedArrayIsNotSoapEncodedInDocumentStyle(): void
+	{
+		$rpc = $this->generate('WsdlTestScalarProvider');
+		$this->assertContains('soap-enc:Array', $this->attributes($rpc, '//wsdl:part', 'type'));
+
+		$document = $this->generate('WsdlTestScalarProvider', 'http://example.com/soap', Wsdl::STYLE_DOCUMENT);
+		$this->assertStringNotContainsString('soap-enc:Array', $document->saveXML());
+	}
+
+	public function testAnUnknownStyleIsRefused(): void
+	{
+		$this->expectException(\InvalidArgumentException::class);
+		$this->generate('WsdlTestProvider', 'http://example.com/soap', 'literal');
+	}
+
+	public function testTheStyleDefaultsToRpcAndIsSettable(): void
+	{
+		$generator = new WsdlGenerator();
+		$this->assertSame(Wsdl::STYLE_RPC, $generator->getStyle());
+
+		$generator->setStyle(Wsdl::STYLE_DOCUMENT);
+		$this->assertSame(Wsdl::STYLE_DOCUMENT, $generator->getStyle());
+	}
+
+	public function testGenerateTakesTheStyle(): void
+	{
+		$document = WsdlGenerator::generate('WsdlTestProvider', 'http://example.com/soap', 'UTF-8', Wsdl::STYLE_DOCUMENT);
+		$this->assertStringContainsString('style="document"', $document);
+		$this->assertStringContainsString('use="literal"', $document);
+
+		$rpc = WsdlGenerator::generate('WsdlTestProvider', 'http://example.com/soap', 'UTF-8');
+		$this->assertStringContainsString('style="rpc"', $rpc);
+		$this->assertStringContainsString('use="encoded"', $rpc);
+	}
+
+	/**
+	 * The style is carried rather than passed, so a subclass written against the
+	 * signatures of 1.1 still loads.
+	 */
+	public function testTheGenerationSignaturesAreThoseOf11(): void
+	{
+		$generateWsdl = new \ReflectionMethod(WsdlGenerator::class, 'generateWsdl');
+		$this->assertSame(3, $generateWsdl->getNumberOfParameters());
+
+		$setMessageElements = new \ReflectionMethod(\Prado\Wsdl\WsdlOperation::class, 'setMessageElements');
+		$this->assertSame(2, $setMessageElements->getNumberOfParameters());
+	}
+
+	/**
 	 * @return array<int, array<int, string>> The provider to generate for
 	 */
 	public static function providerNameProvider(): array
@@ -274,7 +398,7 @@ class WsdlGeneratorTest extends WsdlTestCase
 	public function testProseNamingThePropertyMarkerExportsNoElement(): void
 	{
 		$dom = $this->generate('WsdlTestNestedProvider');
-		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestAddress']/xsd:all/xsd:element", 'name');
+		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestAddress']/*/xsd:element", 'name');
 		$this->assertSame(['street', 'zip'], $elements);
 		$this->assertNotContains('internal', $elements);
 	}
@@ -282,7 +406,7 @@ class WsdlGeneratorTest extends WsdlTestCase
 	public function testThePropertyMarkerIsReadFromAOneLineDocComment(): void
 	{
 		$dom = $this->generate('WsdlTestProseMarkerProvider');
-		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestOneLineType']/xsd:all/xsd:element", 'name');
+		$elements = $this->attributes($dom, "//xsd:complexType[@name='WsdlTestOneLineType']/*/xsd:element", 'name');
 		$this->assertSame(['a'], $elements);
 	}
 

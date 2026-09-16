@@ -37,6 +37,38 @@ class WsdlTest extends WsdlTestCase
 		return $dom;
 	}
 
+	public function testTheStyleDefaultsToRpcAndIsSettable(): void
+	{
+		$wsdl = $this->newWsdl();
+		$this->assertSame(Wsdl::STYLE_RPC, $wsdl->getBindingStyle());
+
+		$wsdl->setBindingStyle(Wsdl::STYLE_DOCUMENT);
+		$this->assertSame(Wsdl::STYLE_DOCUMENT, $wsdl->getBindingStyle());
+
+		$this->assertSame(
+			Wsdl::STYLE_DOCUMENT,
+			(new Wsdl('Service', 'http://example.com/soap', 'UTF-8', Wsdl::STYLE_DOCUMENT))->getBindingStyle()
+		);
+	}
+
+	/**
+	 * @dataProvider badStyleProvider
+	 * @param mixed $style The style to set
+	 */
+	public function testAStyleThatIsNeitherIsRefused($style): void
+	{
+		$this->expectException(\InvalidArgumentException::class);
+		$this->newWsdl()->setBindingStyle($style);
+	}
+
+	/**
+	 * @return array<string, array{0: mixed}> The style to set
+	 */
+	public static function badStyleProvider(): array
+	{
+		return ['literal' => ['literal'], 'empty' => [''], 'wrong case' => ['RPC'], 'encoded' => ['encoded']];
+	}
+
 	public function testTheTargetNamespaceFollowsTheServiceName(): void
 	{
 		$dom = $this->parse($this->newWsdl('Payments'));
@@ -305,22 +337,69 @@ class WsdlTest extends WsdlTestCase
 		$wsdl = $this->newWsdl();
 		$wsdl->addComplexType('Record', [
 			['name' => 'a', 'type' => 'xsd:string', 'nil' => false, 'minOc' => false, 'maxOc' => false],
-			['name' => 'b', 'type' => 'xsd:int', 'nil' => 'true', 'minOc' => 1, 'maxOc' => 4],
+			['name' => 'b', 'type' => 'xsd:int', 'nil' => 'true', 'minOc' => 0, 'maxOc' => 1],
 		]);
 		$dom = $this->parse($wsdl);
 
 		$this->assertSame(['Record'], $this->complexTypes($dom));
+		$this->assertCount(1, $this->query($dom, "//xsd:complexType[@name='Record']/xsd:all"));
 		$this->assertSame(['a', 'b'], $this->attributes($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element", 'name'));
 
 		$b = $this->element($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='b']");
 		$this->assertSame('true', $b->getAttribute('nillable'));
-		$this->assertSame('1', $b->getAttribute('minOccurs'));
-		$this->assertSame('4', $b->getAttribute('maxOccurs'));
+		$this->assertSame('0', $b->getAttribute('minOccurs'));
+		$this->assertSame('1', $b->getAttribute('maxOccurs'));
 
 		$a = $this->element($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='a']");
 		$this->assertFalse($a->hasAttribute('nillable'));
 		$this->assertFalse($a->hasAttribute('minOccurs'));
 		$this->assertFalse($a->hasAttribute('maxOccurs'));
+	}
+
+	/**
+	 * An xsd:all holds each element at most once, so a count above one is only
+	 * valid in a sequence. A schema compiler rejects the element otherwise.
+	 *
+	 * @dataProvider occurrenceProvider
+	 * @param mixed $minOccurs The minOccurs of the element
+	 * @param mixed $maxOccurs The maxOccurs of the element
+	 * @param string $compositor The compositor the type is expected to use
+	 */
+	public function testACountAboveOneMovesTheTypeToASequence($minOccurs, $maxOccurs, $compositor): void
+	{
+		$wsdl = $this->newWsdl();
+		$wsdl->addComplexType('Record', [
+			['name' => 'a', 'type' => 'xsd:int', 'nil' => false, 'minOc' => $minOccurs, 'maxOc' => $maxOccurs],
+		]);
+		$dom = $this->parse($wsdl);
+
+		$this->assertCount(1, $this->query($dom, "//xsd:complexType[@name='Record']/" . $compositor));
+	}
+
+	/**
+	 * @return array<string, array{0: mixed, 1: mixed, 2: string}> The counts and the compositor they require
+	 */
+	public static function occurrenceProvider(): array
+	{
+		return [
+			'no counts' => [false, false, 'xsd:all'],
+			'zero and one' => [0, 1, 'xsd:all'],
+			'maxOccurs above one' => [false, 2, 'xsd:sequence'],
+			'minOccurs above one' => [2, false, 'xsd:sequence'],
+			'unbounded' => [0, 'unbounded', 'xsd:sequence'],
+		];
+	}
+
+	public function testAnUnboundedMaxOccursReachesTheElement(): void
+	{
+		$wsdl = $this->newWsdl();
+		$wsdl->addComplexType('Record', [
+			['name' => 'a', 'type' => 'xsd:int', 'nil' => false, 'minOc' => 0, 'maxOc' => 'unbounded'],
+		]);
+		$dom = $this->parse($wsdl);
+
+		$element = $this->element($dom, "//xsd:complexType[@name='Record']/xsd:sequence/xsd:element[@name='a']");
+		$this->assertSame('unbounded', $element->getAttribute('maxOccurs'));
 	}
 
 	public function testAnArrayTypeBecomesAnUnboundedSequence(): void
@@ -378,7 +457,7 @@ class WsdlTest extends WsdlTestCase
 			['timeArray', 'xsd:time'],
 			['dateTimeArray', 'xsd:dateTime'],
 			['mixedArray', 'xsd:anyType'],
-			['objectArray', 'xsd:struct'],
+			['objectArray', 'xsd:anyType'],
 			['RecordArray', 'tns:Record'],
 		];
 	}

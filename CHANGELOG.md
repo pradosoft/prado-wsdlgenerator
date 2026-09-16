@@ -13,6 +13,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Wsdl::getArrayElementType()` resolves the element type of an array
   complexType.
 - `WsdlGenerator::hasTag()` reads a marker tag from a doc comment.
+- A document and literal binding style, following the wrapped convention of
+  WS-I Basic Profile 1.1, which prohibits the SOAP encoding the generator has
+  always emitted (R2706). Opt in with `Wsdl::STYLE_DOCUMENT`, through
+  `WsdlGenerator::generate()`, `WsdlGenerator::setStyle()` or the `Wsdl`
+  constructor. Each message carries one part naming a global element that wraps
+  the parameters, the body is literal and carries no `encodingStyle`, and an
+  untyped `array` converts to `xsd:anyType` rather than `soap-enc:Array`.
+  `Wsdl::STYLE_RPC` remains the default and is unchanged.
 - A unit test suite, static analysis at level 6, and continuous integration on
   PHP 8.1, 8.2 and 8.3.
 
@@ -39,6 +47,15 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   naming the value.
 - The fallback service URI read `HTTP_HOST` and `PHP_SELF` without checking they
   were set, warning twice off a request.
+- `object` converted to `xsd:struct`, which XML Schema does not define. It
+  converts to `xsd:anyType`.
+- A `@soapproperty` carrying a `minOccurs` or `maxOccurs` above one emitted it
+  inside an `xsd:all`, where XML Schema allows only 0 or 1. A type carrying such
+  a count holds its elements in an `xsd:sequence` instead, and a type without one
+  keeps the `xsd:all` it had.
+- `{maxOccurs=unbounded}` cast to the integer 0, so a property asking to repeat
+  without limit declared that it could not appear at all. The keyword reaches the
+  element.
 - Ten `break` statements sat unreachable after a `return` in the type switch.
 
 ### Changed
@@ -76,6 +93,11 @@ case the 1.2 document is the correct one.
 Nothing was removed from the public or protected API, and no input that this
 package accepted in 1.1 is refused. Several that were fatal before now either
 generate or raise a named exception.
+
+The binding style is carried rather than passed, so `WsdlGenerator::generateWsdl()`,
+`WsdlOperation::setMessageElements()` and the rest keep the signatures they had.
+`WsdlGenerator::generate()` is the one exception: it takes the style as a fourth
+argument, so a subclass that overrides that static method has to accept it too.
 
 ## 1.1
 

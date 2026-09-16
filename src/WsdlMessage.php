@@ -62,6 +62,37 @@ class WsdlMessage
 	}
 
 	/**
+	 * Gets the parts of this message.
+	 * @return array<int, array<string, string>> The parts
+	 * @since 1.2
+	 */
+	public function getParts()
+	{
+		return $this->parts;
+	}
+
+	/**
+	 * Returns the message as a DOM element carrying one part naming a global
+	 * element, which is the single part a document and literal message holds.
+	 * @param \DOMDocument $dom The document the message is created in
+	 * @param string $elementName The global element the part names
+	 * @return \DOMElement The message element
+	 * @since 1.2
+	 */
+	public function getDocumentMessageElement(\DOMDocument $dom, $elementName)
+	{
+		$message = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:message');
+		$message->setAttribute('name', $this->name);
+
+		$part = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:part');
+		$part->setAttribute('name', 'parameters');
+		$part->setAttribute('element', 'tns:' . $elementName);
+		$message->appendChild($part);
+
+		return $message;
+	}
+
+	/**
 	 * Returns the message as a DOM element. A part with no type is left out,
 	 * which is how a void return produces a message with no parts.
 	 * @param \DOMDocument $dom The document the message is created in

@@ -74,7 +74,7 @@ class Wsdl
 	 * The binding style. Only rpc is generated.
 	 * @var string
 	 */
-	private string $bindingStyle = 'rpc';
+	private string $bindingStyle = self::STYLE_RPC;
 
 	/**
 	 * The transport the binding uses.
@@ -106,7 +106,7 @@ class Wsdl
 		'time' => 'xsd:time',
 		'dateTime' => 'xsd:dateTime',
 		'mixed' => 'xsd:anyType',
-		'object' => 'xsd:struct',
+		'object' => 'xsd:anyType',
 	];
 
 	/**
@@ -115,15 +115,34 @@ class Wsdl
 	private const ENCODING_PATTERN = '/^[A-Za-z][A-Za-z0-9._-]*$/';
 
 	/**
+	 * Remote procedure call style with SOAP encoding, as WSDL 1.1 and SOAP 1.1
+	 * define it. A message carries one part per parameter, typed. This is what the
+	 * generator has always produced, and remains the default.
+	 * @since 1.2
+	 */
+	public const STYLE_RPC = 'rpc';
+
+	/**
+	 * Document style with literal encoding, following the wrapped convention of
+	 * WS-I Basic Profile 1.1, which prohibits SOAP encoding (R2706). A message
+	 * carries one part naming a global element that wraps the parameters.
+	 * @since 1.2
+	 */
+	public const STYLE_DOCUMENT = 'document';
+
+	/**
 	 * Creates a new wsdl document.
 	 * @param mixed $name The name of the service, a string, or a value coerced to
 	 * one as interpolation coerced it before the properties carried types
 	 * @param string $serviceUri The URI of the service that handles this WSDL
 	 * @param mixed $encoding The character encoding of the document, coerced the
 	 * same way
+	 * @param string $style The binding style, {@see STYLE_RPC} or {@see STYLE_DOCUMENT}
+	 * @throws \InvalidArgumentException if the style is neither
 	 */
-	public function __construct($name, $serviceUri = '', $encoding = '')
+	public function __construct($name, $serviceUri = '', $encoding = '', $style = self::STYLE_RPC)
 	{
+		$this->setBindingStyle($style);
 		// The properties carry types, and the document was assembled by
 		// interpolation before they did. Coerce at the boundary, so a caller that
 		// passed something other than a string still gets what it always got.
@@ -146,6 +165,42 @@ class Wsdl
 	{
 		$this->buildWsdl();
 		return $this->wsdl;
+	}
+
+	/**
+	 * Returns the binding style of the document.
+	 * @return string {@see STYLE_RPC} or {@see STYLE_DOCUMENT}
+	 * @since 1.2
+	 */
+	public function getBindingStyle()
+	{
+		return $this->bindingStyle;
+	}
+
+	/**
+	 * Sets the binding style of the document.
+	 * @param string $value {@see STYLE_RPC} or {@see STYLE_DOCUMENT}
+	 * @throws \InvalidArgumentException if the style is neither
+	 * @return void
+	 * @since 1.2
+	 */
+	public function setBindingStyle($value)
+	{
+		if ($value !== self::STYLE_RPC && $value !== self::STYLE_DOCUMENT) {
+			throw new \InvalidArgumentException('"' . $value . '" is not a binding style.');
+		}
+
+		$this->bindingStyle = $value;
+	}
+
+	/**
+	 * Tells whether the document follows the document and literal style.
+	 * @return bool Whether the style is {@see STYLE_DOCUMENT}
+	 * @since 1.2
+	 */
+	protected function isDocumentStyle()
+	{
+		return $this->bindingStyle === self::STYLE_DOCUMENT;
 	}
 
 	/**
@@ -218,12 +273,15 @@ class Wsdl
 	 */
 	public function addTypes(\DOMDocument $dom)
 	{
-		if (!count($this->types)) {
+		if (!count($this->types) && !$this->isDocumentStyle()) {
 			return;
 		}
 		$types = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:types');
 		$schema = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:schema');
 		$schema->setAttribute('targetNamespace', $this->targetNamespace);
+		if ($this->isDocumentStyle()) {
+			$schema->setAttribute('elementFormDefault', 'qualified');
+		}
 		foreach ($this->types as $type => $elements) {
 			$complexType = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:complexType');
 			$complexType->setAttribute('name', $type);
@@ -239,7 +297,8 @@ class Wsdl
 				$sequence->appendChild($e);
 				$complexType->appendChild($sequence);
 			} else {
-				$all = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:all');
+				$compositor = $this->needsSequence($elements) ? 'xsd:sequence' : 'xsd:all';
+				$all = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', $compositor);
 				foreach ($elements as $elem) {
 					$e = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
 					$e->setAttribute('name', $elem['name']);
@@ -258,9 +317,13 @@ class Wsdl
 				$complexType->appendChild($all);
 			}
 			$schema->appendChild($complexType);
-			$types->appendChild($schema);
 		}
 
+		if ($this->isDocumentStyle()) {
+			$this->addMessageElements($dom, $schema);
+		}
+
+		$types->appendChild($schema);
 		$this->definitions->appendChild($types);
 	}
 
@@ -280,6 +343,80 @@ class Wsdl
 			['&amp;', '&lt;', '&gt;', '&quot;', '&apos;'],
 			(string) $value
 		);
+	}
+
+	/**
+	 * Adds the global elements a document and literal message names. The wrapped
+	 * convention gives the request the name of the operation and the response that
+	 * name followed by Response, each wrapping the parts in a sequence.
+	 * @param \DOMDocument $dom The document to add to
+	 * @param \DOMElement $schema The schema the elements belong to
+	 * @return void
+	 * @since 1.2
+	 */
+	protected function addMessageElements(\DOMDocument $dom, \DOMElement $schema)
+	{
+		foreach ($this->operations as $operation) {
+			$name = $operation->getName();
+			$input = $operation->getInputMessage();
+			$output = $operation->getOutputMessage();
+
+			$schema->appendChild($this->createMessageElement($dom, $name, $input === null ? [] : $input->getParts()));
+			$schema->appendChild($this->createMessageElement($dom, $name . 'Response', $output === null ? [] : $output->getParts()));
+		}
+	}
+
+	/**
+	 * Builds the global element that wraps the parts of one message.
+	 * @param \DOMDocument $dom The document to create in
+	 * @param string $name The name of the element
+	 * @param array<int, array<string, string>> $parts The parts to wrap
+	 * @return \DOMElement The element
+	 * @since 1.2
+	 */
+	protected function createMessageElement(\DOMDocument $dom, $name, array $parts)
+	{
+		$element = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
+		$element->setAttribute('name', $name);
+
+		$complexType = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:complexType');
+		$sequence = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:sequence');
+
+		foreach ($parts as $part) {
+			if (empty($part['name']) || empty($part['type'])) {
+				continue;
+			}
+			$child = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
+			$child->setAttribute('name', $part['name']);
+			$child->setAttribute('type', $part['type']);
+			$sequence->appendChild($child);
+		}
+
+		$complexType->appendChild($sequence);
+		$element->appendChild($complexType);
+		return $element;
+	}
+
+	/**
+	 * Tells whether a complexType has to hold its elements in a sequence. An
+	 * xsd:all holds each element at most once, so an occurrence count above one
+	 * is only valid in an xsd:sequence.
+	 * @param array<int, array<string, mixed>>|string $elements The elements of the type
+	 * @return bool Whether a sequence is required
+	 * @since 1.2
+	 */
+	protected function needsSequence($elements)
+	{
+		foreach ((array) $elements as $element) {
+			foreach (['minOc', 'maxOc'] as $key) {
+				$count = $element[$key] ?? false;
+				if ($count === 'unbounded' || (is_numeric($count) && (int) $count > 1)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -315,6 +452,7 @@ class Wsdl
 	protected function addMessages(\DOMDocument $dom)
 	{
 		foreach ($this->operations as $operation) {
+			$operation->setBindingStyle($this->bindingStyle);
 			$operation->setMessageElements($this->definitions, $dom);
 		}
 	}
