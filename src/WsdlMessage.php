@@ -68,7 +68,7 @@ class WsdlMessage
 		$message->setAttribute('name', $this->name);
 
 		foreach ($this->parts as $part) {
-			if (isset($part['name'])) {
+			if (isset($part['name']) && isset($part['type']) && $part['type'] !== '') {
 				$partElement = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:part');
 				$partElement->setAttribute('name', $part['name']);
 				$partElement->setAttribute('type', $part['type']);

@@ -77,7 +77,26 @@ class Wsdl
 
 	private $_encoding='';
 
-	private static $_primitiveTypes = array('string', 'int', 'float', 'boolean', 'date', 'time', 'dateTime');
+	/**
+	 * Maps the type names accepted in a doc comment to their XSD equivalent. The
+	 * aliases match the ones WsdlGenerator::convertType() accepts.
+	 * @var array
+	 */
+	private static $_primitiveTypes = array(
+		'string' => 'xsd:string',
+		'str' => 'xsd:string',
+		'int' => 'xsd:int',
+		'integer' => 'xsd:int',
+		'float' => 'xsd:float',
+		'double' => 'xsd:float',
+		'boolean' => 'xsd:boolean',
+		'bool' => 'xsd:boolean',
+		'date' => 'xsd:date',
+		'time' => 'xsd:time',
+		'dateTime' => 'xsd:dateTime',
+		'mixed' => 'xsd:anyType',
+		'object' => 'xsd:struct',
+	);
 
 	/**
 	 * Creates a new Wsdl thing
@@ -153,7 +172,7 @@ class Wsdl
 				$singularType = substr($type, 0, strlen($type) - 5);
 				$e = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
 				$e->setAttribute('name', $singularType);
-				$e->setAttribute('type', sprintf('tns:%s',$singularType));
+				$e->setAttribute('type', $this->getArrayElementType($type));
 				$e->setAttribute('minOccurs','0');
 				$e->setAttribute('maxOccurs','unbounded');
 				$sequence->appendChild($e);
@@ -185,12 +204,26 @@ class Wsdl
 	}
 
 	/**
+	 * Resolves the element type of an array complexType. A primitive element
+	 * takes its XSD type, anything else is a complexType in the target namespace.
+	 * @param 		string		$type		The name of the array complexType, ending in 'Array'
+	 * @return 		string					The qualified type of the array's element
+	 * @since 1.2
+	 */
+	protected function getArrayElementType($type)
+	{
+		$elementType = substr($type, 0, strlen($type) - 5);
+		return isset(self::$_primitiveTypes[$elementType]) ? self::$_primitiveTypes[$elementType] : 'tns:' . $elementType;
+	}
+
+	/**
 	 * @return string prefix 'xsd:' for primitive array types, otherwise, 'tns:'
+	 * @deprecated 1.2 use {@link getArrayElementType}, which resolves the whole type name
 	 */
 	protected function getArrayTypePrefix($type)
 	{
 		$elementType = substr($type, 0, strlen($type) - 5);
-		return in_array($elementType, self::$_primitiveTypes) ? 'xsd:' : 'tns:';
+		return isset(self::$_primitiveTypes[$elementType]) ? 'xsd:' : 'tns:';
 	}
 
 	/**

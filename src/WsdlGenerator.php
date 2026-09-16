@@ -90,6 +90,8 @@ class WsdlGenerator
 	 */
 	public function generateWsdl($className, $serviceUri='',$encoding='')
 	{
+		$this->types = array();
+		$this->wsdl = '';
 		$this->wsdlDocument = new Wsdl($className, $serviceUri, $encoding);
 
 		$classReflect = new \ReflectionClass($className);
@@ -204,7 +206,9 @@ class WsdlGenerator
 					$methodDoc .= trim($line);
 				}
 				else if (!$gotParams) {
-					$params[count($params)-1]['desc'] .= trim($line);
+					if (count($params) > 0) {
+						$params[count($params)-1]['desc'] .= trim($line);
+					}
 				}
 				else {
 					if ($line == '*/') continue;
