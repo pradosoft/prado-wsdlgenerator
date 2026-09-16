@@ -2,12 +2,16 @@ name: Wsdl Generator
 on: [push, pull_request]
 jobs:
   wsdlgenerator:
-    name: Wsdl Generator (PHP ${{ matrix.php-versions }})
+    name: Wsdl Generator (PHP ${{ matrix.php-versions }}${{ matrix.coverage && ', coverage' || '' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php-versions: ['8.1', '8.2', '8.3']
+        # Coverage is measured once, on the newest PHP, rather than once per version.
+        include:
+          - php-versions: '8.3'
+            coverage: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,7 +23,7 @@ jobs:
           # soap is not required by the package; it backs the tests that read a
           # generated document the way a client does.
           extensions: dom, pcre, soap, spl
-          coverage: xdebug
+          coverage: ${{ matrix.coverage && 'xdebug' || 'none' }}
           tools: php-cs-fixer, cs2pr
 
       - name: Validate composer.json
@@ -48,6 +52,10 @@ jobs:
         run: vendor/bin/phpstan analyse --error-format=checkstyle --memory-limit=512M | cs2pr
 
       - name: Run Unit Tests
+        if: ${{ !matrix.coverage }}
         run: composer unittest
-        env:
-          XDEBUG_MODE: coverage
+
+      # Fails the job when the lines or methods of src fall below 100%.
+      - name: Run Unit Tests with the coverage gate
+        if: ${{ matrix.coverage }}
+        run: composer coverage-gate

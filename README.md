@@ -129,8 +129,13 @@ major release may change that.
 ## Development
 
 ```
-composer fix       # apply the code style
-composer stan      # static analysis
-composer unittest  # the unit tests
-composer fulltest  # all three
+composer fix            # apply the code style
+composer stan           # static analysis
+composer unittest       # the unit tests
+composer fulltest       # all three
+composer coverage       # the unit tests, with a coverage summary
+composer coverage-gate  # the unit tests, failing below 100% coverage
 ```
+
+Coverage needs Xdebug. Continuous integration runs the gate on PHP 8.3, and the
+unit tests alone on 8.1 and 8.2.
