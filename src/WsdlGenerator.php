@@ -93,6 +93,7 @@ class WsdlGenerator
 		$this->wsdlDocument = new Wsdl($className, $serviceUri, $encoding);
 
 		$classReflect = new \ReflectionClass($className);
+		$this->processTypeTags($classReflect);
 		$methods = $classReflect->getMethods();
 
 		foreach ($methods as $method) {
@@ -123,6 +124,35 @@ class WsdlGenerator
 		return $generator->getWsdl();
 		//exit();
 
+	}
+
+	/**
+	 * Declares the complex types named by the \@soaptype tags in the class doc comment.
+	 * A type declared this way is written to the WSDL even when no \@soapmethod
+	 * signature refers to it, which is how a method returning mixed results makes
+	 * every shape it can return known to the client. The tag takes a class name,
+	 * optionally suffixed with [] for the array form:
+	 * <code>
+	 * \@soaptype MyRecord
+	 * \@soaptype MyRecord[]
+	 * </code>
+	 * The class name follows the same grammar as \@param and \@return, so it carries
+	 * no namespace.
+	 * @param 		ReflectionClass		$classReflect		The class to read the tags from
+	 * @since 1.2
+	 */
+	protected function processTypeTags(\ReflectionClass $classReflect)
+	{
+		$comment = $classReflect->getDocComment();
+		if ($comment === false) {
+			return;
+		}
+
+		if (preg_match_all('/(?:^|\/\*\*)[ \t*]*@soaptype\s+(\w+(\[\s*\])?)/mi', $comment, $matches)) {
+			foreach ($matches[1] as $type) {
+				$this->convertType(preg_replace('/\s+/', '', $type));
+			}
+		}
 	}
 
 	/**
