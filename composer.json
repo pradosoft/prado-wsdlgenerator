@@ -35,7 +35,8 @@
 	},
 	"require-dev": {
 		"phpunit/phpunit": "^10",
-		"friendsofphp/php-cs-fixer": "^3.95"
+		"friendsofphp/php-cs-fixer": "^3.95",
+		"phpstan/phpstan": "^2.1"
 	},
 	"suggest": {
 		"ext-soap": "Used by the SOAP server the generated WSDL describes"
@@ -67,9 +68,11 @@
 	"scripts": {
 		"fix": "vendor/bin/php-cs-fixer fix",
 		"check": "vendor/bin/php-cs-fixer fix --dry-run",
+		"stan": "vendor/bin/phpstan analyse --memory-limit=512M",
 		"unittest": "vendor/bin/phpunit --testsuite unit",
 		"fulltest": [
 			"@fix",
+			"@stan",
 			"@unittest"
 		]
 	}

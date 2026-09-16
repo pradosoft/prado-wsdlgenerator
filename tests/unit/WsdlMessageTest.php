@@ -9,7 +9,7 @@ class WsdlMessageTest extends WsdlTestCase
 {
 	/**
 	 * Builds a message element and returns the document holding it.
-	 * @param array $parts The parts of the message
+	 * @param array<int, array<string, string>> $parts The parts of the message
 	 * @return DOMDocument The document holding the message
 	 */
 	protected function build(array $parts)
@@ -20,20 +20,20 @@ class WsdlMessageTest extends WsdlTestCase
 		return $dom;
 	}
 
-	public function testGetNameReturnsTheName()
+	public function testGetNameReturnsTheName(): void
 	{
 		$message = new WsdlMessage('opRequest', []);
 		$this->assertSame('opRequest', $message->getName());
 	}
 
-	public function testTheElementCarriesTheName()
+	public function testTheElementCarriesTheName(): void
 	{
 		$dom = $this->build([]);
 		$this->assertSame('opRequest', $dom->documentElement->getAttribute('name'));
 		$this->assertSame(self::WSDL_NS, $dom->documentElement->namespaceURI);
 	}
 
-	public function testEveryPartBecomesAnElement()
+	public function testEveryPartBecomesAnElement(): void
 	{
 		$dom = $this->build([
 			['name' => 'a', 'type' => 'xsd:string'],
@@ -42,7 +42,7 @@ class WsdlMessageTest extends WsdlTestCase
 		$this->assertSame(['a' => 'xsd:string', 'b' => 'tns:Record'], $this->parts($dom, 'opRequest'));
 	}
 
-	public function testAPartWithoutANameIsLeftOut()
+	public function testAPartWithoutANameIsLeftOut(): void
 	{
 		$dom = $this->build([['type' => 'xsd:string'], ['name' => 'b', 'type' => 'xsd:int']]);
 		$this->assertSame(['b' => 'xsd:int'], $this->parts($dom, 'opRequest'));
@@ -51,13 +51,13 @@ class WsdlMessageTest extends WsdlTestCase
 	/**
 	 * A void return converts to an empty type, which is not a usable part.
 	 */
-	public function testAPartWithAnEmptyTypeIsLeftOut()
+	public function testAPartWithAnEmptyTypeIsLeftOut(): void
 	{
 		$dom = $this->build([['name' => 'return', 'type' => '']]);
 		$this->assertSame([], $this->parts($dom, 'opRequest'));
 	}
 
-	public function testAPartWithoutATypeIsLeftOut()
+	public function testAPartWithoutATypeIsLeftOut(): void
 	{
 		$dom = $this->build([['name' => 'return']]);
 		$this->assertSame([], $this->parts($dom, 'opRequest'));

@@ -16,7 +16,7 @@ class WsdlSoapClientTest extends WsdlTestCase
 {
 	/**
 	 * The documents written for the tests, removed afterwards.
-	 * @var array
+	 * @var array<int, string>
 	 */
 	private array $files = [];
 
@@ -48,7 +48,7 @@ class WsdlSoapClientTest extends WsdlTestCase
 		return new SoapClient('file://' . $file, ['exceptions' => true, 'cache_wsdl' => WSDL_CACHE_NONE]);
 	}
 
-	public function testTheClientReadsAnOperationSignature()
+	public function testTheClientReadsAnOperationSignature(): void
 	{
 		$this->assertSame(['int add(int $a, int $b)'], $this->client('WsdlTestProvider')->__getFunctions());
 	}
@@ -57,7 +57,7 @@ class WsdlSoapClientTest extends WsdlTestCase
 	 * An array of a primitive used to declare an element type that resolved to
 	 * nothing, and the client reported the operation as returning void.
 	 */
-	public function testTheClientResolvesEveryArrayReturn()
+	public function testTheClientResolvesEveryArrayReturn(): void
 	{
 		$this->assertSame([
 			'stringArray names()',
@@ -67,12 +67,12 @@ class WsdlSoapClientTest extends WsdlTestCase
 		], $this->client('WsdlTestArrayProvider')->__getFunctions());
 	}
 
-	public function testTheClientReadsAVoidOperation()
+	public function testTheClientReadsAVoidOperation(): void
 	{
 		$this->assertSame(['void doThing()'], $this->client('WsdlTestVoidProvider')->__getFunctions());
 	}
 
-	public function testTheClientSeesATypeNoSignatureNames()
+	public function testTheClientSeesATypeNoSignatureNames(): void
 	{
 		$types = $this->client('WsdlTestTypeTagProvider')->__getTypes();
 		$names = [];
@@ -86,7 +86,7 @@ class WsdlSoapClientTest extends WsdlTestCase
 		$this->assertContains('WsdlTestAddress', $names);
 	}
 
-	public function testTheClientReadsThePropertiesOfADeclaredType()
+	public function testTheClientReadsThePropertiesOfADeclaredType(): void
 	{
 		$types = $this->client('WsdlTestNestedProvider')->__getTypes();
 		$person = '';

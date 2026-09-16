@@ -33,14 +33,14 @@ class WsdlMessage
 
 	/**
 	 * The parameters of this message, each an array of name, type and desc.
-	 * @var array
+	 * @var array<int, array<string, string>>
 	 */
 	private array $parts;
 
 	/**
 	 * Creates a new message.
 	 * @param string $messageName The name of the message
-	 * @param array $parts The parts of this message
+	 * @param array<int, array<string, string>> $parts The parts of this message
 	 */
 	public function __construct($messageName, $parts)
 	{

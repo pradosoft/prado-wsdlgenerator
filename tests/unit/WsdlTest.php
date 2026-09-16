@@ -37,32 +37,32 @@ class WsdlTest extends WsdlTestCase
 		return $dom;
 	}
 
-	public function testTheTargetNamespaceFollowsTheServiceName()
+	public function testTheTargetNamespaceFollowsTheServiceName(): void
 	{
 		$dom = $this->parse($this->newWsdl('Payments'));
 		$this->assertSame('urn:Paymentswsdl', $dom->documentElement->getAttribute('targetNamespace'));
 		$this->assertSame('Payments', $dom->documentElement->getAttribute('name'));
 	}
 
-	public function testTheEncodingReachesTheDeclaration()
+	public function testTheEncodingReachesTheDeclaration(): void
 	{
 		$this->assertStringContainsString('encoding="UTF-8"', $this->newWsdl('Service', 'UTF-8')->getWsdl());
 	}
 
-	public function testAnEmptyEncodingLeavesTheDeclarationBare()
+	public function testAnEmptyEncodingLeavesTheDeclarationBare(): void
 	{
 		$wsdl = $this->newWsdl('Service', '')->getWsdl();
 		$this->assertStringStartsWith('<?xml version="1.0"?>', $wsdl);
 		$this->assertStringNotContainsString('encoding=', substr($wsdl, 0, 40));
 	}
 
-	public function testTheServiceUriReachesTheAddress()
+	public function testTheServiceUriReachesTheAddress(): void
 	{
 		$dom = $this->parse($this->newWsdl());
 		$this->assertSame(['http://example.com/soap'], $this->attributes($dom, '//soap:address', 'location'));
 	}
 
-	public function testAnEmptyServiceUriFallsBackToTheRequest()
+	public function testAnEmptyServiceUriFallsBackToTheRequest(): void
 	{
 		$server = $_SERVER;
 		$_SERVER['HTTPS'] = 'on';
@@ -78,7 +78,7 @@ class WsdlTest extends WsdlTestCase
 		}
 	}
 
-	public function testAnOffHttpsFallsBackToHttp()
+	public function testAnOffHttpsFallsBackToHttp(): void
 	{
 		$server = $_SERVER;
 		$_SERVER['HTTPS'] = 'off';
@@ -93,14 +93,14 @@ class WsdlTest extends WsdlTestCase
 		}
 	}
 
-	public function testAnEncodedAmpersandIsRestoredInTheUri()
+	public function testAnEncodedAmpersandIsRestoredInTheUri(): void
 	{
 		$wsdl = new Wsdl('Service', 'http://example.com/soap?a=1&amp;b=2', 'UTF-8');
 		$dom = $this->parse($wsdl);
 		$this->assertSame(['http://example.com/soap?a=1&b=2'], $this->attributes($dom, '//soap:address', 'location'));
 	}
 
-	public function testAServerWithoutARequestRaisesNoWarning()
+	public function testAServerWithoutARequestRaisesNoWarning(): void
 	{
 		$server = $_SERVER;
 		unset($_SERVER['HTTPS'], $_SERVER['HTTP_HOST'], $_SERVER['PHP_SELF']);
@@ -127,7 +127,7 @@ class WsdlTest extends WsdlTestCase
 	 * markup character used to reach the parser as markup. The document then
 	 * failed to load and the build died dereferencing a null element.
 	 */
-	public function testAnAmpersandInTheServiceNameSurvivesTheDocument()
+	public function testAnAmpersandInTheServiceNameSurvivesTheDocument(): void
 	{
 		$dom = $this->parse($this->newWsdl('Pay&Go'));
 		$this->assertSame('Pay&Go', $dom->documentElement->getAttribute('name'));
@@ -138,7 +138,7 @@ class WsdlTest extends WsdlTestCase
 	 * Parses a document whose namespace URI the parser objects to, and returns
 	 * both the document and what it said.
 	 * @param Wsdl $wsdl The document to read
-	 * @return array The parsed document and the distinct parser messages
+	 * @return array{0: DOMDocument, 1: array<int, string>} The parsed document and the distinct parser messages
 	 */
 	protected function parseWithComplaints(Wsdl $wsdl)
 	{
@@ -157,7 +157,7 @@ class WsdlTest extends WsdlTestCase
 		return [$dom, $messages];
 	}
 
-	public function testAQuoteInTheServiceNameSurvivesTheDocument()
+	public function testAQuoteInTheServiceNameSurvivesTheDocument(): void
 	{
 		[$dom] = $this->parseWithComplaints($this->newWsdl('Pay"Go'));
 		$this->assertSame('Pay"Go', $dom->documentElement->getAttribute('name'));
@@ -168,7 +168,7 @@ class WsdlTest extends WsdlTestCase
 	 * built from it is not a URI the parser accepts. It has always been so, and
 	 * every namespaced provider carries one.
 	 */
-	public function testANamespacedServiceNameSurvivesTheDocument()
+	public function testANamespacedServiceNameSurvivesTheDocument(): void
 	{
 		[$dom, $messages] = $this->parseWithComplaints($this->newWsdl('Prado\\Wsdl\\Payments'));
 
@@ -180,7 +180,7 @@ class WsdlTest extends WsdlTestCase
 	 * A namespace declaration is serialized as it was given, which escaping does
 	 * not reach. The service is named rather than handing back a broken document.
 	 */
-	public function testAServiceNameNoDocumentCanHoldIsRefused()
+	public function testAServiceNameNoDocumentCanHoldIsRefused(): void
 	{
 		$this->expectException(\RuntimeException::class);
 		$this->expectExceptionMessage('does not parse');
@@ -191,12 +191,15 @@ class WsdlTest extends WsdlTestCase
 	 * @dataProvider encodingProvider
 	 * @param string $encoding The encoding to declare
 	 */
-	public function testAnEncodingNameIsDeclared($encoding)
+	public function testAnEncodingNameIsDeclared($encoding): void
 	{
 		$this->assertStringContainsString('encoding="' . $encoding . '"', $this->newWsdl('Service', $encoding)->getWsdl());
 	}
 
-	public static function encodingProvider()
+	/**
+	 * @return array<int, array<int, string>> The encoding to declare
+	 */
+	public static function encodingProvider(): array
 	{
 		return [['UTF-8'], ['utf8'], ['ISO-8859-1'], ['Shift_JIS'], ['windows-1252']];
 	}
@@ -207,13 +210,16 @@ class WsdlTest extends WsdlTestCase
 	 * @dataProvider badEncodingProvider
 	 * @param string $encoding The encoding to declare
 	 */
-	public function testAnEncodingThatIsNotAnEncodingNameIsRefused($encoding)
+	public function testAnEncodingThatIsNotAnEncodingNameIsRefused($encoding): void
 	{
 		$this->expectException(\InvalidArgumentException::class);
 		$this->newWsdl('Service', $encoding)->getWsdl();
 	}
 
-	public static function badEncodingProvider()
+	/**
+	 * @return array<string, array<int, string>> The encoding to declare
+	 */
+	public static function badEncodingProvider(): array
 	{
 		return [
 			'closes the declaration' => ['UTF-8" foo="bar'],
@@ -223,7 +229,7 @@ class WsdlTest extends WsdlTestCase
 		];
 	}
 
-	public function testTheDocumentCarriesTheOperationThroughEverySection()
+	public function testTheDocumentCarriesTheOperationThroughEverySection(): void
 	{
 		$dom = $this->parse($this->newWsdl());
 		$this->assertSame(['op'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
@@ -233,21 +239,21 @@ class WsdlTest extends WsdlTestCase
 		$this->assertSame(['ServicePort'], $this->attributes($dom, '//wsdl:port', 'name'));
 	}
 
-	public function testTheBindingCarriesTheStyleAndTransport()
+	public function testTheBindingCarriesTheStyleAndTransport(): void
 	{
 		$dom = $this->parse($this->newWsdl());
-		$binding = $this->query($dom, '//wsdl:binding/soap:binding')->item(0);
+		$binding = $this->element($dom, '//wsdl:binding/soap:binding');
 		$this->assertSame('rpc', $binding->getAttribute('style'));
 		$this->assertSame('http://schemas.xmlsoap.org/soap/http', $binding->getAttribute('transport'));
 	}
 
-	public function testADocumentWithoutTypesDeclaresNoTypesSection()
+	public function testADocumentWithoutTypesDeclaresNoTypesSection(): void
 	{
 		$dom = $this->parse($this->newWsdl());
 		$this->assertCount(0, $this->query($dom, '//wsdl:types'));
 	}
 
-	public function testAComplexTypeBecomesAnAllOfItsElements()
+	public function testAComplexTypeBecomesAnAllOfItsElements(): void
 	{
 		$wsdl = $this->newWsdl();
 		$wsdl->addComplexType('Record', [
@@ -259,24 +265,24 @@ class WsdlTest extends WsdlTestCase
 		$this->assertSame(['Record'], $this->complexTypes($dom));
 		$this->assertSame(['a', 'b'], $this->attributes($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element", 'name'));
 
-		$b = $this->query($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='b']")->item(0);
+		$b = $this->element($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='b']");
 		$this->assertSame('true', $b->getAttribute('nillable'));
 		$this->assertSame('1', $b->getAttribute('minOccurs'));
 		$this->assertSame('4', $b->getAttribute('maxOccurs'));
 
-		$a = $this->query($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='a']")->item(0);
+		$a = $this->element($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='a']");
 		$this->assertFalse($a->hasAttribute('nillable'));
 		$this->assertFalse($a->hasAttribute('minOccurs'));
 		$this->assertFalse($a->hasAttribute('maxOccurs'));
 	}
 
-	public function testAnArrayTypeBecomesAnUnboundedSequence()
+	public function testAnArrayTypeBecomesAnUnboundedSequence(): void
 	{
 		$wsdl = $this->newWsdl();
 		$wsdl->addComplexType('RecordArray', '');
 		$dom = $this->parse($wsdl);
 
-		$element = $this->query($dom, "//xsd:complexType[@name='RecordArray']/xsd:sequence/xsd:element")->item(0);
+		$element = $this->element($dom, "//xsd:complexType[@name='RecordArray']/xsd:sequence/xsd:element");
 		$this->assertSame('Record', $element->getAttribute('name'));
 		$this->assertSame('tns:Record', $element->getAttribute('type'));
 		$this->assertSame('0', $element->getAttribute('minOccurs'));
@@ -287,13 +293,13 @@ class WsdlTest extends WsdlTestCase
 	 * An array of a primitive used to declare its element as tns:<type>, which
 	 * resolves to nothing, so the client lost the type.
 	 */
-	public function testAnArrayOfAPrimitiveTakesTheXsdType()
+	public function testAnArrayOfAPrimitiveTakesTheXsdType(): void
 	{
 		$wsdl = $this->newWsdl();
 		$wsdl->addComplexType('stringArray', '');
 		$dom = $this->parse($wsdl);
 
-		$element = $this->query($dom, "//xsd:complexType[@name='stringArray']/xsd:sequence/xsd:element")->item(0);
+		$element = $this->element($dom, "//xsd:complexType[@name='stringArray']/xsd:sequence/xsd:element");
 		$this->assertSame('xsd:string', $element->getAttribute('type'));
 	}
 
@@ -302,12 +308,15 @@ class WsdlTest extends WsdlTestCase
 	 * @param string $type The array complexType name
 	 * @param string $expected The type its element takes
 	 */
-	public function testGetArrayElementTypeResolvesEveryAlias($type, $expected)
+	public function testGetArrayElementTypeResolvesEveryAlias($type, $expected): void
 	{
 		$this->assertSame($expected, $this->callProtected($this->newWsdl(), 'getArrayElementType', [$type]));
 	}
 
-	public static function elementTypeProvider()
+	/**
+	 * @return array<int, array<int, string>> The type and the type its element takes
+	 */
+	public static function elementTypeProvider(): array
 	{
 		return [
 			['stringArray', 'xsd:string'],
@@ -332,12 +341,15 @@ class WsdlTest extends WsdlTestCase
 	 * @param string $type The array complexType name
 	 * @param string $expected The prefix its element takes
 	 */
-	public function testTheDeprecatedPrefixStillAnswersForBothKinds($type, $expected)
+	public function testTheDeprecatedPrefixStillAnswersForBothKinds($type, $expected): void
 	{
 		$this->assertSame($expected, $this->callProtected($this->newWsdl(), 'getArrayTypePrefix', [$type]));
 	}
 
-	public static function typePrefixProvider()
+	/**
+	 * @return array<int, array<int, string>> The type and the prefix its element takes
+	 */
+	public static function typePrefixProvider(): array
 	{
 		return [
 			['stringArray', 'xsd:'],

@@ -63,6 +63,7 @@ class WsdlOperation
 	/**
 	 * Sets the request message of the operation.
 	 * @param WsdlMessage $msg The request message
+	 * @return void
 	 */
 	public function setInputMessage(WsdlMessage $msg)
 	{
@@ -72,6 +73,7 @@ class WsdlOperation
 	/**
 	 * Sets the response message of the operation.
 	 * @param WsdlMessage $msg The response message
+	 * @return void
 	 */
 	public function setOutputMessage(WsdlMessage $msg)
 	{
@@ -82,6 +84,7 @@ class WsdlOperation
 	 * Sets the message elements for this operation into the wsdl document.
 	 * @param \DOMElement $wsdl The parent element for the messages
 	 * @param \DOMDocument $dom The document the messages are created in
+	 * @return void
 	 */
 	public function setMessageElements(\DOMElement $wsdl, \DOMDocument $dom)
 	{

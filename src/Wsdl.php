@@ -40,8 +40,9 @@ class Wsdl
 	private string $serviceUri;
 
 	/**
-	 * The complexType declarations, indexed by type name.
-	 * @var \ArrayObject
+	 * The complexType declarations, indexed by type name. An array type holds an
+	 * empty string, because its element is derived from its name.
+	 * @var \ArrayObject<string, array<int, array<string, mixed>>|string>
 	 */
 	private \ArrayObject $types;
 
@@ -90,7 +91,7 @@ class Wsdl
 	/**
 	 * Maps the type names accepted in a doc comment to their XSD equivalent. The
 	 * aliases match the ones WsdlGenerator::convertType() accepts.
-	 * @var array
+	 * @var array<string, string>
 	 */
 	private static array $_primitiveTypes = [
 		'string' => 'xsd:string',
@@ -132,6 +133,10 @@ class Wsdl
 		$this->targetNamespace = 'urn:' . $name . 'wsdl';
 	}
 
+	/**
+	 * Builds the document and returns it.
+	 * @return string The generated wsdl
+	 */
 	public function getWsdl()
 	{
 		$this->buildWsdl();
@@ -140,6 +145,9 @@ class Wsdl
 
 	/**
 	 * Generates the WSDL file into the $this->wsdl variable
+	 * @throws \InvalidArgumentException if the encoding is not an XML encoding name
+	 * @throws \RuntimeException if the generated document does not parse
+	 * @return void
 	 */
 	protected function buildWsdl()
 	{
@@ -188,6 +196,7 @@ class Wsdl
 	 * @param \DOMDocument $dom The document to parse into
 	 * @param string $xml The document to parse
 	 * @throws \RuntimeException if the document does not parse
+	 * @return void
 	 * @since 1.2
 	 */
 	private function loadOrFail(\DOMDocument $dom, $xml)
@@ -200,6 +209,7 @@ class Wsdl
 	/**
 	 * Adds complexType definitions to the document
 	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	public function addTypes(\DOMDocument $dom)
 	{
@@ -295,6 +305,7 @@ class Wsdl
 	/**
 	 * Add messages for the service
 	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addMessages(\DOMDocument $dom)
 	{
@@ -306,6 +317,7 @@ class Wsdl
 	/**
 	 * Add the port types for the service
 	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addPortTypes(\DOMDocument $dom)
 	{
@@ -322,6 +334,7 @@ class Wsdl
 	/**
 	 * Add the bindings for the service
 	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addBindings(\DOMDocument $dom)
 	{
@@ -345,6 +358,7 @@ class Wsdl
 	/**
 	 * Add the service definition
 	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addService(\DOMDocument $dom)
 	{
@@ -367,6 +381,7 @@ class Wsdl
 	/**
 	 * Adds an operation to have port types and bindings output
 	 * @param WsdlOperation $operation The operation to add
+	 * @return void
 	 */
 	public function addOperation(WsdlOperation $operation)
 	{
@@ -376,7 +391,9 @@ class Wsdl
 	/**
 	 * Adds complexTypes to the wsdl
 	 * @param string $type Name of the type
-	 * @param array $elements Elements of the type (each one is an associative array('name','type'))
+	 * @param array<int, array<string, mixed>>|string $elements Elements of the type, each an
+	 * associative array of name and type, or an empty string for an array type
+	 * @return void
 	 */
 	public function addComplexType($type, $elements)
 	{

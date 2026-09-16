@@ -3,6 +3,7 @@
 namespace Prado\Wsdl\Test\Unit;
 
 use DOMDocument;
+use DOMElement;
 use Prado\Wsdl\WsdlMessage;
 use Prado\Wsdl\WsdlOperation;
 
@@ -23,8 +24,8 @@ class WsdlOperationTest extends WsdlTestCase
 
 	/**
 	 * Wraps an element in a document so it can be queried.
-	 * @param \DOMDocument $dom The document the element belongs to
-	 * @param \DOMElement $element The element to hold
+	 * @param DOMDocument $dom The document the element belongs to
+	 * @param DOMElement $element The element to hold
 	 * @return DOMDocument The document holding the element
 	 */
 	protected function hold(DOMDocument $dom, $element)
@@ -33,7 +34,7 @@ class WsdlOperationTest extends WsdlTestCase
 		return $dom;
 	}
 
-	public function testThePortOperationCarriesItsMessages()
+	public function testThePortOperationCarriesItsMessages(): void
 	{
 		$dom = new DOMDocument();
 		$dom = $this->hold($dom, $this->newOperation()->getPortOperation($dom));
@@ -43,33 +44,33 @@ class WsdlOperationTest extends WsdlTestCase
 		$this->assertSame(['tns:opResponse'], $this->attributes($dom, '/wsdl:operation/wsdl:output', 'message'));
 	}
 
-	public function testThePortOperationCarriesItsDocumentation()
+	public function testThePortOperationCarriesItsDocumentation(): void
 	{
 		$dom = new DOMDocument();
 		$dom = $this->hold($dom, $this->newOperation('Adds two numbers.')->getPortOperation($dom));
 
-		$this->assertSame('Adds two numbers.', $this->query($dom, '/wsdl:operation/wsdl:documentation')->item(0)->textContent);
+		$this->assertSame('Adds two numbers.', $this->element($dom, '/wsdl:operation/wsdl:documentation')->textContent);
 	}
 
-	public function testTheDocumentationIsEscaped()
+	public function testTheDocumentationIsEscaped(): void
 	{
 		$dom = new DOMDocument();
 		$dom = $this->hold($dom, $this->newOperation('Uses <b> & "quotes".')->getPortOperation($dom));
 
-		$this->assertSame('Uses <b> & "quotes".', $this->query($dom, '/wsdl:operation/wsdl:documentation')->item(0)->textContent);
+		$this->assertSame('Uses <b> & "quotes".', $this->element($dom, '/wsdl:operation/wsdl:documentation')->textContent);
 	}
 
-	public function testTheBindingOperationCarriesTheActionAndStyle()
+	public function testTheBindingOperationCarriesTheActionAndStyle(): void
 	{
 		$dom = new DOMDocument();
 		$dom = $this->hold($dom, $this->newOperation()->getBindingOperation($dom, 'urn:Servicewsdl'));
 
-		$soapOperation = $this->query($dom, '/wsdl:operation/soap:operation')->item(0);
+		$soapOperation = $this->element($dom, '/wsdl:operation/soap:operation');
 		$this->assertSame('urn:Servicewsdl#op', $soapOperation->getAttribute('soapAction'));
 		$this->assertSame('rpc', $soapOperation->getAttribute('style'));
 	}
 
-	public function testTheBindingStyleIsSettable()
+	public function testTheBindingStyleIsSettable(): void
 	{
 		$dom = new DOMDocument();
 		$dom = $this->hold($dom, $this->newOperation()->getBindingOperation($dom, 'urn:Servicewsdl', 'document'));
@@ -77,7 +78,7 @@ class WsdlOperationTest extends WsdlTestCase
 		$this->assertSame(['document'], $this->attributes($dom, '/wsdl:operation/soap:operation', 'style'));
 	}
 
-	public function testTheBindingOperationCarriesABodyOnBothSides()
+	public function testTheBindingOperationCarriesABodyOnBothSides(): void
 	{
 		$dom = new DOMDocument();
 		$dom = $this->hold($dom, $this->newOperation()->getBindingOperation($dom, 'urn:Servicewsdl'));
@@ -85,13 +86,14 @@ class WsdlOperationTest extends WsdlTestCase
 		$bodies = $this->query($dom, '/wsdl:operation/*/soap:body');
 		$this->assertCount(2, $bodies);
 		foreach ($bodies as $body) {
+			$this->assertInstanceOf(DOMElement::class, $body);
 			$this->assertSame('encoded', $body->getAttribute('use'));
 			$this->assertSame('urn:Servicewsdl', $body->getAttribute('namespace'));
 			$this->assertSame('http://schemas.xmlsoap.org/soap/encoding/', $body->getAttribute('encodingStyle'));
 		}
 	}
 
-	public function testSetMessageElementsAppendsBothMessages()
+	public function testSetMessageElementsAppendsBothMessages(): void
 	{
 		$dom = new DOMDocument();
 		$definitions = $dom->createElementNS(self::WSDL_NS, 'wsdl:definitions');

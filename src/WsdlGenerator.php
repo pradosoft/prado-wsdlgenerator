@@ -38,8 +38,9 @@ class WsdlGenerator
 	private static ?WsdlGenerator $instance = null;
 
 	/**
-	 * The complex types to use in the wsdl, indexed by type name.
-	 * @var array
+	 * The complex types to use in the wsdl, indexed by type name. An array type
+	 * holds an empty string, because its element is derived from its name.
+	 * @var array<string, array<int, array<string, mixed>>|string>
 	 */
 	private array $types = [];
 
@@ -57,6 +58,7 @@ class WsdlGenerator
 
 	/**
 	 * The singleton instance for the generator
+	 * @return WsdlGenerator The instance
 	 */
 	public static function getInstance()
 	{
@@ -112,6 +114,7 @@ class WsdlGenerator
 	 * @param string $className The name of the class to export
 	 * @param string $serviceUri The URI of the service that handles this WSDL
 	 * @param string $encoding character encoding.
+	 * @return string The generated wsdl
 	 */
 	public static function generate($className, $serviceUri = '', $encoding = '')
 	{
@@ -135,7 +138,8 @@ class WsdlGenerator
 	 * </code>
 	 * The class name follows the same grammar as \@param and \@return, so it carries
 	 * no namespace.
-	 * @param \ReflectionClass $classReflect The class to read the tags from
+	 * @param \ReflectionClass<object> $classReflect The class to read the tags from
+	 * @return void
 	 * @since 1.2
 	 */
 	protected function processTypeTags(\ReflectionClass $classReflect)
@@ -172,6 +176,7 @@ class WsdlGenerator
 	/**
 	 * Process a method found in the passed in class.
 	 * @param \ReflectionMethod $method The method to process
+	 * @return void
 	 */
 	protected function processMethod(\ReflectionMethod $method)
 	{
@@ -253,37 +258,27 @@ class WsdlGenerator
 			case 'string':
 			case 'str':
 				return 'xsd:string';
-				break;
 			case 'int':
 			case 'integer':
 				return 'xsd:int';
-				break;
 			case 'float':
 			case 'double':
 				return 'xsd:float';
-				break;
 			case 'boolean':
 			case 'bool':
 				return 'xsd:boolean';
-				break;
 			case 'date':
 				return 'xsd:date';
-				break;
 			case 'time':
 				return 'xsd:time';
-				break;
 			case 'dateTime':
 				return 'xsd:dateTime';
-				break;
 			case 'array':
 				return 'soap-enc:Array';
-				break;
 			case 'object':
 				return 'xsd:struct';
-				break;
 			case 'mixed':
 				return 'xsd:anyType';
-				break;
 			case 'void':
 				return '';
 			default:
