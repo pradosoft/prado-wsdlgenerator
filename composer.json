@@ -75,6 +75,15 @@
 		"check": "vendor/bin/php-cs-fixer fix --dry-run",
 		"stan": "vendor/bin/phpstan analyse --memory-limit=512M",
 		"unittest": "vendor/bin/phpunit --testsuite unit",
+		"coverage": [
+			"@putenv XDEBUG_MODE=coverage",
+			"vendor/bin/phpunit --testsuite unit --coverage-text --only-summary-for-coverage-text"
+		],
+		"coverage-gate": [
+			"@putenv XDEBUG_MODE=coverage",
+			"vendor/bin/phpunit --testsuite unit --coverage-clover build/coverage/clover.xml",
+			"php tests/coverage-gate.php build/coverage/clover.xml 100"
+		],
 		"fulltest": [
 			"@fix",
 			"@stan",
