@@ -25,11 +25,19 @@ namespace Prado\Wsdl;
 class WsdlGenerator
 {
 	/**
-	 * The opening of a doc comment tag: the start of a line or the opening of the
-	 * comment, then the asterisks and spaces that lead into the tag. A tag is read
-	 * only in this position, so prose naming one is not a use of it.
+	 * The opening of a doc comment tag that takes an argument: the start of a line
+	 * or the opening of the comment, then the asterisks and spaces that lead into
+	 * the tag. Such a tag reads exactly like prose naming it, so position is the
+	 * only thing that separates the two.
 	 */
 	private const TAG_START = '(?:^|\\/\\*\\*)[ \\t*]*@';
+
+	/**
+	 * What may follow a marker tag: horizontal space, then the end of the line or
+	 * the end of the comment. A marker takes no argument, so anything else after
+	 * it means the comment is discussing the tag rather than carrying it.
+	 */
+	private const TAG_END = '[ \\t\\r]*(?:\\*\\/|$)';
 
 	/**
 	 * The singleton instance.
@@ -157,8 +165,14 @@ class WsdlGenerator
 	}
 
 	/**
-	 * Tells whether a doc comment carries a marker tag in tag position. A tag
-	 * named in prose reads as prose.
+	 * Tells whether a doc comment carries a marker tag. A marker takes no
+	 * argument, so it ends its line, wherever on the line it is written. A
+	 * comment that goes on to say something about the tag is discussing it:
+	 * <code>
+	 * \@soapmethod                     carries the tag
+	 * Adds two numbers. \@soapmethod    carries the tag
+	 * Discusses the \@soapmethod tag.   does not
+	 * </code>
 	 * @param false|string $comment The doc comment to read, as reflection returns it
 	 * @param string $tag The tag to look for, without its leading at sign
 	 * @return bool Whether the comment carries the tag
@@ -170,7 +184,7 @@ class WsdlGenerator
 			return false;
 		}
 
-		return preg_match('/' . self::TAG_START . $tag . '\\b/mi', $comment) === 1;
+		return preg_match('/@' . $tag . self::TAG_END . '/mi', $comment) === 1;
 	}
 
 	/**

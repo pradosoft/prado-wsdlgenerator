@@ -292,4 +292,12 @@ class WsdlTestProseMarkerProvider
 	public function oneLineMarker()
 	{
 	}
+
+	/**
+	 * Adds two numbers. @soapmethod
+	 * @return string anything
+	 */
+	public function compactMarker()
+	{
+	}
 }

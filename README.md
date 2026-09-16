@@ -1,6 +1,29 @@
 # Wsdl generator used in Prado
 
 Generates a WSDL document from a SOAP provider class by reading its doc comments.
+It backs [`TSoapService`](https://github.com/pradosoft/prado), and runs on its own.
+
+## Installation
+
+```
+composer require pradosoft/prado-wsdlgenerator
+```
+
+Requires PHP 8.1 and ext-dom. See [CHANGELOG.md](CHANGELOG.md) for what changed
+between releases.
+
+## Usage
+
+```php
+use Prado\Wsdl\WsdlGenerator;
+
+echo WsdlGenerator::generate(MyProvider::class, 'https://example.com/soap', 'UTF-8');
+```
+
+`generate()` reflects on the provider, reads the tags below, and returns the
+document. It throws an `InvalidArgumentException` if the encoding is not an XML
+encoding name, and a `RuntimeException` if the service name cannot be written
+into a document.
 
 ## Doc tags
 
@@ -42,4 +65,47 @@ variable name:
  * @var int $zip {nillable=1, minOccurs=0}
  */
 public $zip;
+```
+
+## Where a tag is read
+
+A doc comment that discusses a tag does not carry it, so prose about the
+generator does not declare anything.
+
+`@soapmethod` and `@soapproperty` take no argument, so each is read wherever it
+ends its line:
+
+```php
+/** @soapmethod */                    // carries the tag
+/** Adds two numbers. @soapmethod */  // carries the tag
+/** Set @soapmethod to export this.*/ // does not: the line continues
+```
+
+`@soaptype` takes a class name, which reads exactly like the next word of a
+sentence. Position separates the two instead, so it is read at the start of a
+line or directly after the opening of the comment:
+
+```php
+/** @soaptype Person */               // declares Person
+/**
+ * @soaptype Person                   // declares Person
+ * Prefer @soaptype Address for this  // does not: the tag is mid-line
+ */
+```
+
+## Limitations
+
+- A type name carries no namespace. The generator reflects on the unqualified
+  name written in the doc comment, and writes it into the document as it stands.
+  A namespaced provider produces a `targetNamespace` that libxml reports is not
+  a valid URI, while still parsing the document.
+- The binding style is always `rpc`, and the body is always `encoded`.
+
+## Development
+
+```
+composer fix       # apply the code style
+composer stan      # static analysis
+composer unittest  # the unit tests
+composer fulltest  # all three
 ```

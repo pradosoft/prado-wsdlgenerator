@@ -246,13 +246,23 @@ class WsdlGeneratorTest extends WsdlTestCase
 	}
 
 	/**
-	 * Every marker is read in tag position only, so a doc comment discussing one
-	 * is prose.
+	 * A marker ends its line, so a comment that goes on to say something about
+	 * the tag is discussing it rather than carrying it.
 	 */
 	public function testProseNamingTheMethodMarkerDeclaresNoOperation(): void
 	{
 		$dom = $this->generate('WsdlTestProseMarkerProvider');
-		$this->assertSame(['oneLineMarker'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
+		$this->assertSame(['oneLineMarker', 'compactMarker'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
+	}
+
+	/**
+	 * A marker written after a description on the same line is a marker. This is
+	 * how a terse doc comment carries one.
+	 */
+	public function testTheMethodMarkerIsReadAfterADescription(): void
+	{
+		$dom = $this->generate('WsdlTestProseMarkerProvider');
+		$this->assertSame(['return' => 'xsd:string'], $this->parts($dom, 'compactMarkerResponse'));
 	}
 
 	public function testTheMethodMarkerIsReadFromAOneLineDocComment(): void
@@ -298,8 +308,12 @@ class WsdlGeneratorTest extends WsdlTestCase
 			'opening the comment' => ['/** @soapmethod */', true],
 			'leading tabs' => ["/**\n\t * @soapmethod\n\t */", true],
 			'with other tags' => ["/**\n * Does a thing.\n * @soapmethod\n * @return string x\n */", true],
+			'after a description on one line' => ['/** Adds two numbers. @soapmethod */', true],
+			'after a description on its line' => ["/**\n * Adds two numbers. @soapmethod\n */", true],
+			'trailing space' => ["/**\n * @soapmethod  \n */", true],
 			'named in prose' => ['/** Discusses the @soapmethod tag. */', false],
 			'mid sentence' => ["/**\n * Use the @soapmethod tag here.\n */", false],
+			'negated in prose' => ["/**\n * Carries no @soapmethod, so it is skipped.\n */", false],
 			'a longer tag' => ["/**\n * @soapmethods\n */", false],
 			'absent' => ["/**\n * Does a thing.\n */", false],
 			'no doc comment' => [false, false],
