@@ -109,6 +109,11 @@ class Wsdl
 	];
 
 	/**
+	 * The production an encoding name follows in an XML declaration.
+	 */
+	private const ENCODING_PATTERN = '/^[A-Za-z][A-Za-z0-9._-]*$/';
+
+	/**
 	 * Creates a new wsdl document.
 	 * @param string $name The name of the service
 	 * @param string $serviceUri The URI of the service that handles this WSDL
@@ -120,7 +125,7 @@ class Wsdl
 		$this->serviceName = $name;
 		$protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] !== 'off')) ? 'https://' : 'http://';
 		if ($serviceUri === '') {
-			$serviceUri = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
+			$serviceUri = $protocol . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['PHP_SELF'] ?? '');
 		}
 		$this->serviceUri = str_replace('&amp;', '&', $serviceUri);
 		$this->types = new \ArrayObject();
@@ -138,19 +143,28 @@ class Wsdl
 	 */
 	protected function buildWsdl()
 	{
-		$encoding = $this->_encoding === '' ? '' : 'encoding="' . $this->_encoding . '"';
+		$encoding = '';
+		if ($this->_encoding !== '') {
+			if (!preg_match(self::ENCODING_PATTERN, $this->_encoding)) {
+				throw new \InvalidArgumentException('"' . $this->_encoding . '" is not an XML encoding name.');
+			}
+			$encoding = 'encoding="' . $this->_encoding . '"';
+		}
+
+		$name = self::escapeAttribute($this->serviceName);
+		$targetNamespace = self::escapeAttribute($this->targetNamespace);
 
 		$xml = '<?xml version="1.0" ' . $encoding . '?>
-                 <definitions name="' . $this->serviceName . '" targetNamespace="' . $this->targetNamespace . '"
+                 <definitions name="' . $name . '" targetNamespace="' . $targetNamespace . '"
                      xmlns="http://schemas.xmlsoap.org/wsdl/"
-                     xmlns:tns="' . $this->targetNamespace . '"
+                     xmlns:tns="' . $targetNamespace . '"
                      xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
                      xmlns:xsd="http://www.w3.org/2001/XMLSchema"
 					 xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
                      xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/"></definitions>';
 
 		$dom = new \DOMDocument();
-		$dom->loadXml($xml);
+		$this->loadOrFail($dom, $xml);
 		$this->definitions = $dom->documentElement;
 
 		$this->addTypes($dom);
@@ -161,6 +175,26 @@ class Wsdl
 		$this->addService($dom);
 
 		$this->wsdl = $dom->saveXML();
+
+		// A namespace URI is serialized as it was given, so a service name
+		// carrying a character a URI cannot hold reaches the caller as a document
+		// that no longer parses. Escaping does not reach a namespace declaration.
+		$this->loadOrFail(new \DOMDocument(), $this->wsdl);
+	}
+
+	/**
+	 * Parses a document, and reports the service rather than the parser when it
+	 * does not parse.
+	 * @param \DOMDocument $dom The document to parse into
+	 * @param string $xml The document to parse
+	 * @throws \RuntimeException if the document does not parse
+	 * @since 1.2
+	 */
+	private function loadOrFail(\DOMDocument $dom, $xml)
+	{
+		if (!@$dom->loadXml($xml)) {
+			throw new \RuntimeException('The wsdl of the "' . $this->serviceName . '" service does not parse. Its name is not usable in a document.');
+		}
 	}
 
 	/**
@@ -213,6 +247,24 @@ class Wsdl
 		}
 
 		$this->definitions->appendChild($types);
+	}
+
+	/**
+	 * Escapes a value for an XML attribute. The opening of the document is
+	 * assembled as text, so a value carrying a markup character reaches the parser
+	 * as markup unless it is escaped first. The replacement names no charset,
+	 * because the document is not always UTF-8.
+	 * @param string $value The value to escape
+	 * @return string The escaped value
+	 * @since 1.2
+	 */
+	private static function escapeAttribute($value)
+	{
+		return str_replace(
+			['&', '<', '>', '"', "'"],
+			['&amp;', '&lt;', '&gt;', '&quot;', '&apos;'],
+			(string) $value
+		);
 	}
 
 	/**

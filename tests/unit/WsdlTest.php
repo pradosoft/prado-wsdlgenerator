@@ -100,6 +100,129 @@ class WsdlTest extends WsdlTestCase
 		$this->assertSame(['http://example.com/soap?a=1&b=2'], $this->attributes($dom, '//soap:address', 'location'));
 	}
 
+	public function testAServerWithoutARequestRaisesNoWarning()
+	{
+		$server = $_SERVER;
+		unset($_SERVER['HTTPS'], $_SERVER['HTTP_HOST'], $_SERVER['PHP_SELF']);
+
+		$raised = [];
+		set_error_handler(function ($severity, $message) use (&$raised) {
+			$raised[] = $message;
+			return true;
+		});
+
+		try {
+			$dom = $this->parse(new Wsdl('Service', '', 'UTF-8'));
+			$this->assertSame(['http://'], $this->attributes($dom, '//soap:address', 'location'));
+		} finally {
+			restore_error_handler();
+			$_SERVER = $server;
+		}
+
+		$this->assertSame([], $raised);
+	}
+
+	/**
+	 * The opening of the document is assembled as text, so a name carrying a
+	 * markup character used to reach the parser as markup. The document then
+	 * failed to load and the build died dereferencing a null element.
+	 */
+	public function testAnAmpersandInTheServiceNameSurvivesTheDocument()
+	{
+		$dom = $this->parse($this->newWsdl('Pay&Go'));
+		$this->assertSame('Pay&Go', $dom->documentElement->getAttribute('name'));
+		$this->assertSame('urn:Pay&Gowsdl', $dom->documentElement->getAttribute('targetNamespace'));
+	}
+
+	/**
+	 * Parses a document whose namespace URI the parser objects to, and returns
+	 * both the document and what it said.
+	 * @param Wsdl $wsdl The document to read
+	 * @return array The parsed document and the distinct parser messages
+	 */
+	protected function parseWithComplaints(Wsdl $wsdl)
+	{
+		$previous = libxml_use_internal_errors(true);
+		libxml_clear_errors();
+
+		try {
+			$dom = new DOMDocument();
+			$this->assertTrue($dom->loadXML($wsdl->getWsdl()), 'the document still parses');
+			$messages = array_values(array_unique(array_map(fn ($error) => trim($error->message), libxml_get_errors())));
+		} finally {
+			libxml_clear_errors();
+			libxml_use_internal_errors($previous);
+		}
+
+		return [$dom, $messages];
+	}
+
+	public function testAQuoteInTheServiceNameSurvivesTheDocument()
+	{
+		[$dom] = $this->parseWithComplaints($this->newWsdl('Pay"Go'));
+		$this->assertSame('Pay"Go', $dom->documentElement->getAttribute('name'));
+	}
+
+	/**
+	 * A name holding a namespace separator reaches the document, and the urn
+	 * built from it is not a URI the parser accepts. It has always been so, and
+	 * every namespaced provider carries one.
+	 */
+	public function testANamespacedServiceNameSurvivesTheDocument()
+	{
+		[$dom, $messages] = $this->parseWithComplaints($this->newWsdl('Prado\\Wsdl\\Payments'));
+
+		$this->assertSame('Prado\\Wsdl\\Payments', $dom->documentElement->getAttribute('name'));
+		$this->assertSame(['xmlns:tns: \'urn:Prado\\Wsdl\\Paymentswsdl\' is not a valid URI'], $messages);
+	}
+
+	/**
+	 * A namespace declaration is serialized as it was given, which escaping does
+	 * not reach. The service is named rather than handing back a broken document.
+	 */
+	public function testAServiceNameNoDocumentCanHoldIsRefused()
+	{
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage('does not parse');
+		$this->newWsdl('Pay<Go')->getWsdl();
+	}
+
+	/**
+	 * @dataProvider encodingProvider
+	 * @param string $encoding The encoding to declare
+	 */
+	public function testAnEncodingNameIsDeclared($encoding)
+	{
+		$this->assertStringContainsString('encoding="' . $encoding . '"', $this->newWsdl('Service', $encoding)->getWsdl());
+	}
+
+	public static function encodingProvider()
+	{
+		return [['UTF-8'], ['utf8'], ['ISO-8859-1'], ['Shift_JIS'], ['windows-1252']];
+	}
+
+	/**
+	 * The encoding sits in the declaration, where escaping would not help, so a
+	 * name that is not an encoding name is refused.
+	 * @dataProvider badEncodingProvider
+	 * @param string $encoding The encoding to declare
+	 */
+	public function testAnEncodingThatIsNotAnEncodingNameIsRefused($encoding)
+	{
+		$this->expectException(\InvalidArgumentException::class);
+		$this->newWsdl('Service', $encoding)->getWsdl();
+	}
+
+	public static function badEncodingProvider()
+	{
+		return [
+			'closes the declaration' => ['UTF-8" foo="bar'],
+			'holds a space' => ['UTF 8'],
+			'opens with a digit' => ['8859'],
+			'holds a quote' => ["UTF-8'"],
+		];
+	}
+
 	public function testTheDocumentCarriesTheOperationThroughEverySection()
 	{
 		$dom = $this->parse($this->newWsdl());
