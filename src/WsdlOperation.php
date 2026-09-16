@@ -1,4 +1,5 @@
 <?php
+
 /**
  * WsdlOperation file.
  *
@@ -12,7 +13,6 @@
  *
  * @author Marcus Nyeholt		<tanus@users.sourceforge.net>
  * @author Wei Zhuo <weizhuo[at]gmail[dot]com>
- * @package Prado\Wsdl
  */
 
 namespace Prado\Wsdl;
@@ -26,45 +26,62 @@ namespace Prado\Wsdl;
 class WsdlOperation
 {
 	/**
-	 * The name of the operation
+	 * The name of the operation.
+	 * @var string
 	 */
-	private $operationName;
+	private string $operationName;
 
 	/**
-	 * Documentation for the operation
+	 * The documentation of the operation.
+	 * @var string
 	 */
-	private $documentation;
+	private string $documentation;
 
 	/**
-	 * The input wsdl message
+	 * The request message of the operation.
+	 * @var ?WsdlMessage
 	 */
-	private $inputMessage;
+	private ?WsdlMessage $inputMessage = null;
 
 	/**
-	 * The output wsdl message
+	 * The response message of the operation.
+	 * @var ?WsdlMessage
 	 */
-	private $outputMessage;
+	private ?WsdlMessage $outputMessage = null;
 
-	public function __construct($name, $doc='')
+	/**
+	 * Creates a new operation.
+	 * @param string $name The name of the operation
+	 * @param string $doc The documentation of the operation
+	 */
+	public function __construct($name, $doc = '')
 	{
 		$this->operationName = $name;
 		$this->documentation = $doc;
 	}
 
+	/**
+	 * Sets the request message of the operation.
+	 * @param WsdlMessage $msg The request message
+	 */
 	public function setInputMessage(WsdlMessage $msg)
 	{
 		$this->inputMessage = $msg;
 	}
 
+	/**
+	 * Sets the response message of the operation.
+	 * @param WsdlMessage $msg The response message
+	 */
 	public function setOutputMessage(WsdlMessage $msg)
 	{
 		$this->outputMessage = $msg;
 	}
 
 	/**
-	 * Sets the message elements for this operation into the wsdl document
-	 * @param 	\DOMElement 		$wsdl		The parent domelement for the messages
-	 * @param 	\DOMDocument		$dom		The dom document to create the messages as children of
+	 * Sets the message elements for this operation into the wsdl document.
+	 * @param \DOMElement $wsdl The parent element for the messages
+	 * @param \DOMDocument $dom The document the messages are created in
 	 */
 	public function setMessageElements(\DOMElement $wsdl, \DOMDocument $dom)
 	{
@@ -77,9 +94,9 @@ class WsdlOperation
 	}
 
 	/**
-	 * Get the port operations for this operation
-	 * @param 	\DOMDocument		$dom		The dom document to create the messages as children of
-	 * @return 	\DOMElement					The dom element representing this port.
+	 * Gets the port operation for this operation.
+	 * @param \DOMDocument $dom The document the messages are created in
+	 * @return \DOMElement The element representing this port
 	 */
 	public function getPortOperation(\DOMDocument $dom)
 	{
@@ -88,9 +105,9 @@ class WsdlOperation
 
 		$documentation = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:documentation', htmlentities($this->documentation));
 		$input = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:input');
-		$input->setAttribute('message', 'tns:'.$this->inputMessage->getName());
+		$input->setAttribute('message', 'tns:' . $this->inputMessage->getName());
 		$output = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:output');
-		$output->setAttribute('message', 'tns:'.$this->outputMessage->getName());
+		$output->setAttribute('message', 'tns:' . $this->outputMessage->getName());
 
 		$operation->appendChild($documentation);
 		$operation->appendChild($input);
@@ -103,18 +120,19 @@ class WsdlOperation
 	 * Build the binding operations.
 	 * TODO: Still quite incomplete with all the things being stuck in, I don't understand
 	 * a lot of it, and it's mostly copied from the output of nusoap's wsdl output.
-	 * @param 	\DOMDocument		$dom		The dom document to create the binding as children of
-	 * @param 	string			$namespace	The namespace this binding is in.
-	 * @return 	\DOMElement					The dom element representing this binding.
+	 * @param \DOMDocument $dom The document the binding is created in
+	 * @param string $namespace The namespace this binding is in
+	 * @param string $style The binding style
+	 * @return \DOMElement The element representing this binding.
 	 */
-	public function getBindingOperation(\DOMDocument $dom, $namespace, $style='rpc')
+	public function getBindingOperation(\DOMDocument $dom, $namespace, $style = 'rpc')
 	{
 		$operation = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:operation');
 		$operation->setAttribute('name', $this->operationName);
 
 		$soapOperation = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:operation');
 		$method = $this->operationName;
-		$soapOperation->setAttribute('soapAction', $namespace.'#'.$method);
+		$soapOperation->setAttribute('soapAction', $namespace . '#' . $method);
 		$soapOperation->setAttribute('style', $style);
 
 		$input = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:input');

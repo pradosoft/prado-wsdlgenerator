@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Wsdl file.
  *
@@ -12,7 +13,6 @@
  *
  * @author Marcus Nyeholt		<tanus@users.sourceforge.net>
  * @author Wei Zhuo <weizhuo[at]gmail[dot]com>
- * @package Prado\Wsdl
  */
 
 namespace Prado\Wsdl;
@@ -27,62 +27,72 @@ namespace Prado\Wsdl;
 class Wsdl
 {
 	/**
-	 * The name of the service (usually the classname)
-	 * @var 	string
+	 * The name of the service, usually the class name.
+	 * @var string
 	 */
-	private $serviceName;
+	private string $serviceName;
 
 	/**
-	 * The URI to find the service at. If empty, the current
-	 * uri will be used (minus any query string)
+	 * The URI the service is found at. An empty URI falls back to the current
+	 * request, without its query string.
+	 * @var string
 	 */
-	private $serviceUri;
+	private string $serviceUri;
 
 	/**
-	 * The complex types declarations
-	 * @var 	\ArrayObject
+	 * The complexType declarations, indexed by type name.
+	 * @var \ArrayObject
 	 */
-	private $types;
+	private \ArrayObject $types;
 
 	/**
-	 * A collection of SOAP operations
-	 * @var 	array
+	 * The SOAP operations of the service.
+	 * @var WsdlOperation[]
 	 */
-	private $operations=array();
+	private array $operations = [];
 
 	/**
-	 * Wsdl DOMDocument that's generated.
+	 * The generated wsdl document.
+	 * @var ?string
 	 */
-	private $wsdl = null;
+	private ?string $wsdl = null;
 
 	/**
-	 * The definitions created for the WSDL
+	 * The definitions element the document is built into.
+	 * @var ?\DOMElement
 	 */
-	private $definitions = null;
+	private ?\DOMElement $definitions = null;
 
 	/**
-	 * The target namespace variable?
+	 * The namespace the generated types and messages belong to.
+	 * @var string
 	 */
-	private $targetNamespace ='';
+	private string $targetNamespace = '';
 
 	/**
-	 * The binding style (default at the moment)
+	 * The binding style. Only rpc is generated.
+	 * @var string
 	 */
-	private $bindingStyle = 'rpc';
+	private string $bindingStyle = 'rpc';
 
 	/**
-	 * The binding uri
+	 * The transport the binding uses.
+	 * @var string
 	 */
-	private $bindingTransport = 'http://schemas.xmlsoap.org/soap/http';
+	private string $bindingTransport = 'http://schemas.xmlsoap.org/soap/http';
 
-	private $_encoding='';
+	/**
+	 * The character encoding declared by the document.
+	 * @var string
+	 */
+	private string $_encoding = '';
 
 	/**
 	 * Maps the type names accepted in a doc comment to their XSD equivalent. The
 	 * aliases match the ones WsdlGenerator::convertType() accepts.
 	 * @var array
 	 */
-	private static $_primitiveTypes = array(
+	private static array $_primitiveTypes = [
 		'string' => 'xsd:string',
 		'str' => 'xsd:string',
 		'int' => 'xsd:int',
@@ -96,23 +106,25 @@ class Wsdl
 		'dateTime' => 'xsd:dateTime',
 		'mixed' => 'xsd:anyType',
 		'object' => 'xsd:struct',
-	);
+	];
 
 	/**
-	 * Creates a new Wsdl thing
-	 * @param 	string		$name the name of the service.
-	 * @param 	string		$serviceUri		The URI of the service that handles this WSDL
-	 * @param string character encoding
+	 * Creates a new wsdl document.
+	 * @param string $name The name of the service
+	 * @param string $serviceUri The URI of the service that handles this WSDL
+	 * @param string $encoding The character encoding of the document
 	 */
-	public function __construct($name, $serviceUri='', $encoding='')
+	public function __construct($name, $serviceUri = '', $encoding = '')
 	{
 		$this->_encoding = $encoding;
 		$this->serviceName = $name;
-		$protocol=(isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS']!=='off'))?'https://':'http://';
-		if ($serviceUri === '') $serviceUri = $protocol.$_SERVER['HTTP_HOST'].$_SERVER['PHP_SELF'];
+		$protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] !== 'off')) ? 'https://' : 'http://';
+		if ($serviceUri === '') {
+			$serviceUri = $protocol . $_SERVER['HTTP_HOST'] . $_SERVER['PHP_SELF'];
+		}
 		$this->serviceUri = str_replace('&amp;', '&', $serviceUri);
 		$this->types = new \ArrayObject();
-		$this->targetNamespace = 'urn:'.$name.'wsdl';
+		$this->targetNamespace = 'urn:' . $name . 'wsdl';
 	}
 
 	public function getWsdl()
@@ -126,12 +138,12 @@ class Wsdl
 	 */
 	protected function buildWsdl()
 	{
-		$encoding = $this->_encoding==='' ? '' : 'encoding="'.$this->_encoding.'"';
+		$encoding = $this->_encoding === '' ? '' : 'encoding="' . $this->_encoding . '"';
 
-		$xml = '<?xml version="1.0" '.$encoding.'?>
-                 <definitions name="'.$this->serviceName.'" targetNamespace="'.$this->targetNamespace.'"
+		$xml = '<?xml version="1.0" ' . $encoding . '?>
+                 <definitions name="' . $this->serviceName . '" targetNamespace="' . $this->targetNamespace . '"
                      xmlns="http://schemas.xmlsoap.org/wsdl/"
-                     xmlns:tns="'.$this->targetNamespace.'"
+                     xmlns:tns="' . $this->targetNamespace . '"
                      xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
                      xmlns:xsd="http://www.w3.org/2001/XMLSchema"
 					 xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
@@ -153,45 +165,45 @@ class Wsdl
 
 	/**
 	 * Adds complexType definitions to the document
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
 	 */
 	public function addTypes(\DOMDocument $dom)
 	{
-		if (!count($this->types)) return;
+		if (!count($this->types)) {
+			return;
+		}
 		$types = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:types');
 		$schema = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:schema');
 		$schema->setAttribute('targetNamespace', $this->targetNamespace);
-		foreach($this->types as $type => $elements)
-		{
+		foreach ($this->types as $type => $elements) {
 			$complexType = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:complexType');
 			$complexType->setAttribute('name', $type);
-			if(substr($type, strlen($type) - 5, 5) == 'Array')  // if it's an array
-			{
+			if (substr($type, strlen($type) - 5, 5) == 'Array') {  // if it's an array
 				$sequence = $dom->createElement("xsd:sequence");
 
 				$singularType = substr($type, 0, strlen($type) - 5);
 				$e = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
 				$e->setAttribute('name', $singularType);
 				$e->setAttribute('type', $this->getArrayElementType($type));
-				$e->setAttribute('minOccurs','0');
-				$e->setAttribute('maxOccurs','unbounded');
+				$e->setAttribute('minOccurs', '0');
+				$e->setAttribute('maxOccurs', 'unbounded');
 				$sequence->appendChild($e);
 				$complexType->appendChild($sequence);
-			}
-			else
-			{
+			} else {
 				$all = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:all');
-				foreach($elements as $elem)
-				{
+				foreach ($elements as $elem) {
 					$e = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
 					$e->setAttribute('name', $elem['name']);
 					$e->setAttribute('type', $elem['type']);
-					if($elem['minOc']!==false)
-						$e->setAttribute('minOccurs',$elem['minOc']);
-					if($elem['maxOc']!==false)
-						$e->setAttribute('maxOccurs',$elem['maxOc']);
-					if($elem['nil']!==false)
-						$e->setAttribute('nillable',$elem['nil']);
+					if ($elem['minOc'] !== false) {
+						$e->setAttribute('minOccurs', $elem['minOc']);
+					}
+					if ($elem['maxOc'] !== false) {
+						$e->setAttribute('maxOccurs', $elem['maxOc']);
+					}
+					if ($elem['nil'] !== false) {
+						$e->setAttribute('nillable', $elem['nil']);
+					}
 					$all->appendChild($e);
 				}
 				$complexType->appendChild($all);
@@ -206,19 +218,21 @@ class Wsdl
 	/**
 	 * Resolves the element type of an array complexType. A primitive element
 	 * takes its XSD type, anything else is a complexType in the target namespace.
-	 * @param 		string		$type		The name of the array complexType, ending in 'Array'
-	 * @return 		string					The qualified type of the array's element
+	 * @param string $type The name of the array complexType, ending in 'Array'
+	 * @return string The qualified type of the array's element
 	 * @since 1.2
 	 */
 	protected function getArrayElementType($type)
 	{
 		$elementType = substr($type, 0, strlen($type) - 5);
-		return isset(self::$_primitiveTypes[$elementType]) ? self::$_primitiveTypes[$elementType] : 'tns:' . $elementType;
+		return self::$_primitiveTypes[$elementType] ?? 'tns:' . $elementType;
 	}
 
 	/**
-	 * @return string prefix 'xsd:' for primitive array types, otherwise, 'tns:'
+	 * Resolves the namespace prefix of an array complexType's element.
 	 * @deprecated 1.2 use {@link getArrayElementType}, which resolves the whole type name
+	 * @param string $type The name of the array complexType, ending in 'Array'
+	 * @return string 'xsd:' for a primitive element type, otherwise 'tns:'
 	 */
 	protected function getArrayTypePrefix($type)
 	{
@@ -228,7 +242,7 @@ class Wsdl
 
 	/**
 	 * Add messages for the service
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
 	 */
 	protected function addMessages(\DOMDocument $dom)
 	{
@@ -239,12 +253,12 @@ class Wsdl
 
 	/**
 	 * Add the port types for the service
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
 	 */
 	protected function addPortTypes(\DOMDocument $dom)
 	{
 		$portType = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:portType');
-		$portType->setAttribute('name', $this->serviceName.'PortType');
+		$portType->setAttribute('name', $this->serviceName . 'PortType');
 
 		$this->definitions->appendChild($portType);
 		foreach ($this->operations as $operation) {
@@ -255,13 +269,13 @@ class Wsdl
 
 	/**
 	 * Add the bindings for the service
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
 	 */
 	protected function addBindings(\DOMDocument $dom)
 	{
 		$binding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:binding');
-		$binding->setAttribute('name', $this->serviceName.'Binding');
-		$binding->setAttribute('type', 'tns:'.$this->serviceName.'PortType');
+		$binding->setAttribute('name', $this->serviceName . 'Binding');
+		$binding->setAttribute('type', 'tns:' . $this->serviceName . 'PortType');
 
 		$soapBinding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:binding');
 		$soapBinding->setAttribute('style', $this->bindingStyle);
@@ -278,16 +292,16 @@ class Wsdl
 
 	/**
 	 * Add the service definition
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
 	 */
 	protected function addService(\DOMDocument $dom)
 	{
 		$service = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:service');
-		$service->setAttribute('name', $this->serviceName.'Service');
+		$service->setAttribute('name', $this->serviceName . 'Service');
 
 		$port = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:port');
-		$port->setAttribute('name', $this->serviceName.'Port');
-		$port->setAttribute('binding', 'tns:'.$this->serviceName.'Binding');
+		$port->setAttribute('name', $this->serviceName . 'Port');
+		$port->setAttribute('binding', 'tns:' . $this->serviceName . 'Binding');
 
 		$soapAddress = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:address');
 		$soapAddress->setAttribute('location', $this->serviceUri);
@@ -300,7 +314,7 @@ class Wsdl
 
 	/**
 	 * Adds an operation to have port types and bindings output
-	 * @param 		WsdlOperation		$operation 		The operation to add
+	 * @param WsdlOperation $operation The operation to add
 	 */
 	public function addOperation(WsdlOperation $operation)
 	{
@@ -309,8 +323,8 @@ class Wsdl
 
 	/**
 	 * Adds complexTypes to the wsdl
-	 * @param string 	$type 	Name of the type
-	 * @param Array		$elements	Elements of the type (each one is an associative array('name','type'))
+	 * @param string $type Name of the type
+	 * @param array $elements Elements of the type (each one is an associative array('name','type'))
 	 */
 	public function addComplexType($type, $elements)
 	{

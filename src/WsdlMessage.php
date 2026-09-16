@@ -1,4 +1,5 @@
 <?php
+
 /**
  * WsdlMessage file.
  *
@@ -12,7 +13,6 @@
  *
  * @author Marcus Nyeholt		<tanus@users.sourceforge.net>
  * @author Wei Zhuo <weizhuo[at]gmail[dot]com>
- * @package Prado\Wsdl
  */
 
 namespace Prado\Wsdl;
@@ -26,21 +26,21 @@ namespace Prado\Wsdl;
 class WsdlMessage
 {
 	/**
-	 * The name of this message
-	 * @var 	string
+	 * The name of this message.
+	 * @var string
 	 */
-	private $name;
+	private string $name;
 
 	/**
-	 * Represents the parameters for this message
-	 * @var 	array
+	 * The parameters of this message, each an array of name, type and desc.
+	 * @var array
 	 */
-	private $parts;
+	private array $parts;
 
 	/**
-	 * Creates a new message
-	 * @param 	string		$messageName	The name of the message
-	 * @param 	string		$parts			The parts of this message
+	 * Creates a new message.
+	 * @param string $messageName The name of the message
+	 * @param array $parts The parts of this message
 	 */
 	public function __construct($messageName, $parts)
 	{
@@ -50,8 +50,8 @@ class WsdlMessage
 	}
 
 	/**
-	 * Gets the name of this message
-	 * @return 		string		The name
+	 * Gets the name of this message.
+	 * @return string The name
 	 */
 	public function getName()
 	{
@@ -59,8 +59,10 @@ class WsdlMessage
 	}
 
 	/**
-	 * Return the message as a DOM element
-	 * @param 		DOMDocument		$wsdl		The wsdl document the messages will be children of
+	 * Returns the message as a DOM element. A part with no type is left out,
+	 * which is how a void return produces a message with no parts.
+	 * @param \DOMDocument $dom The document the message is created in
+	 * @return \DOMElement The message element
 	 */
 	public function getMessageElement(\DOMDocument $dom)
 	{

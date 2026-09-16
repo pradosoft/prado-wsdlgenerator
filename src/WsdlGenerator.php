@@ -1,4 +1,5 @@
 <?php
+
 /**
  * WsdlGenerator file.
  *
@@ -11,7 +12,6 @@
  * This file is part of the PRADO framework from {@link http://www.xisc.com}
  *
  * @author Marcus Nyeholt		<tanus@users.sourceforge.net>
- * @package Prado\Wsdl
  */
 
 namespace Prado\Wsdl;
@@ -25,47 +25,35 @@ namespace Prado\Wsdl;
 class WsdlGenerator
 {
 	/**
-	 * The instance.
-	 * var		WsdlGenerator
+	 * The singleton instance.
+	 * @var ?WsdlGenerator
 	 */
-	private static $instance;
+	private static ?WsdlGenerator $instance = null;
 
 	/**
-	 * The name of this service (the classname)
-	 * @var 	string
+	 * The complex types to use in the wsdl, indexed by type name.
+	 * @var array
 	 */
-	private $serviceName = '';
+	private array $types = [];
 
 	/**
-	 * The complex types to use in the wsdl
-	 * @var 	Array
+	 * The document the generated wsdl is built into.
+	 * @var ?Wsdl
 	 */
-	private $types = array();
+	private ?Wsdl $wsdlDocument = null;
 
 	/**
-	 * The operations available in this wsdl
-	 * @var 	\ArrayObject
+	 * The actual wsdl string.
+	 * @var string
 	 */
-	private $operations;
-
-	/**
-	 * The wsdl object.
-	 * @var 	object
-	 */
-	private $wsdlDocument;
-
-	/**
-	 * The actual wsdl string
-	 * @var 	string
-	 */
-	private $wsdl = '';
+	private string $wsdl = '';
 
 	/**
 	 * The singleton instance for the generator
 	 */
 	public static function getInstance()
 	{
-		if (is_null(self::$instance)) {
+		if (null === self::$instance) {
 			self::$instance = new WsdlGenerator();
 		}
 		return self::$instance;
@@ -73,7 +61,7 @@ class WsdlGenerator
 
 	/**
 	 * Get the Wsdl generated
-	 * @return 	string		The Wsdl for this wsdl
+	 * @return string The Wsdl for this wsdl
 	 */
 	public function getWsdl()
 	{
@@ -83,14 +71,14 @@ class WsdlGenerator
 	/**
 	 * Generates WSDL for a passed in class, and saves it in the current object. The
 	 * WSDL can then be retrieved by calling
-	 * @param 	string		$className		The name of the class to generate for
-	 * @param 	string		$serviceUri		The URI of the service that handles this WSDL
+	 * @param string $className The name of the class to generate for
+	 * @param string $serviceUri The URI of the service that handles this WSDL
 	 * @param string $encoding character encoding.
-	 * @return 	void
+	 * @return void
 	 */
-	public function generateWsdl($className, $serviceUri='',$encoding='')
+	public function generateWsdl($className, $serviceUri = '', $encoding = '')
 	{
-		$this->types = array();
+		$this->types = [];
 		$this->wsdl = '';
 		$this->wsdlDocument = new Wsdl($className, $serviceUri, $encoding);
 
@@ -105,7 +93,7 @@ class WsdlGenerator
 			}
 		}
 
-		foreach($this->types as $type => $elements) {
+		foreach ($this->types as $type => $elements) {
 			$this->wsdlDocument->addComplexType($type, $elements);
 		}
 
@@ -114,14 +102,14 @@ class WsdlGenerator
 
 	/**
 	 * Static method that generates and outputs the generated wsdl
-	 * @param 		string		$className		The name of the class to export
-	 * @param 		string		$serviceUri		The URI of the service that handles this WSDL
+	 * @param string $className The name of the class to export
+	 * @param string $serviceUri The URI of the service that handles this WSDL
 	 * @param string $encoding character encoding.
 	 */
-	public static function generate($className, $serviceUri='', $encoding='')
+	public static function generate($className, $serviceUri = '', $encoding = '')
 	{
 		$generator = WsdlGenerator::getInstance();
-		$generator->generateWsdl($className, $serviceUri,$encoding);
+		$generator->generateWsdl($className, $serviceUri, $encoding);
 		//header('Content-type: text/xml');
 		return $generator->getWsdl();
 		//exit();
@@ -140,7 +128,7 @@ class WsdlGenerator
 	 * </code>
 	 * The class name follows the same grammar as \@param and \@return, so it carries
 	 * no namespace.
-	 * @param 		ReflectionClass		$classReflect		The class to read the tags from
+	 * @param \ReflectionClass $classReflect The class to read the tags from
 	 * @since 1.2
 	 */
 	protected function processTypeTags(\ReflectionClass $classReflect)
@@ -159,7 +147,7 @@ class WsdlGenerator
 
 	/**
 	 * Process a method found in the passed in class.
-	 * @param 		ReflectionMethod		$method		The method to process
+	 * @param \ReflectionMethod $method The method to process
 	 */
 	protected function processMethod(\ReflectionMethod $method)
 	{
@@ -173,45 +161,45 @@ class WsdlGenerator
                                  |(^[\\s]*)
                                  |(^[\\t]*)/ixm", "", $comment);
 
-	    $comment = str_replace("\r", "", $comment);
-	    $comment = preg_replace("/([\\t])+/", "\t", $comment);
-	    $commentLines = explode("\n", $comment);
+		$comment = str_replace("\r", "", $comment);
+		$comment = preg_replace("/([\\t])+/", "\t", $comment);
+		$commentLines = explode("\n", $comment);
 
 		$methodDoc = '';
-		$params = array();
-		$return = array();
+		$params = [];
+		$return = [];
 		$gotDesc = false;
 		$gotParams = false;
 
 		foreach ($commentLines as $line) {
-			if ($line == '') continue;
+			if ($line == '') {
+				continue;
+			}
 			if ($line[0] == '@') {
 				$gotDesc = true;
 				if (preg_match('/^@param\s+([\w\[\]()]+)\s+\$([\w()]+)\s*(.*)/i', $line, $match)) {
-					$param = array();
+					$param = [];
 					$param['type'] = $this->convertType($match[1]);
 					$param['name'] = $match[2];
 					$param['desc'] = $match[3];
 					$params[] = $param;
-				}
-				else if (preg_match('/^@return\s+([\w\[\]()]+)\s*(.*)/i', $line, $match)) {
+				} elseif (preg_match('/^@return\s+([\w\[\]()]+)\s*(.*)/i', $line, $match)) {
 					$gotParams = true;
 					$return['type'] = $this->convertType($match[1]);
 					$return['desc'] = $match[2];
 					$return['name'] = 'return';
 				}
-			}
-			else {
+			} else {
 				if (!$gotDesc) {
 					$methodDoc .= trim($line);
-				}
-				else if (!$gotParams) {
+				} elseif (!$gotParams) {
 					if (count($params) > 0) {
-						$params[count($params)-1]['desc'] .= trim($line);
+						$params[count($params) - 1]['desc'] .= trim($line);
 					}
-				}
-				else {
-					if ($line == '*/') continue;
+				} else {
+					if ($line == '*/') {
+						continue;
+					}
 					$return['desc'] .= trim($line);
 				}
 			}
@@ -220,8 +208,8 @@ class WsdlGenerator
 		$methodName = $method->getName();
 		$operation = new WsdlOperation($methodName, $methodDoc);
 
-		$operation->setInputMessage(new WsdlMessage($methodName.'Request', $params));
-		$operation->setOutputMessage(new WsdlMessage($methodName.'Response', array($return)));
+		$operation->setInputMessage(new WsdlMessage($methodName . 'Request', $params));
+		$operation->setOutputMessage(new WsdlMessage($methodName . 'Response', [$return]));
 
 		$this->wsdlDocument->addOperation($operation);
 
@@ -232,63 +220,61 @@ class WsdlGenerator
 	 * Cerebral Cortex (let me know and I'll remove asap).
 	 *
 	 * TODO: date and dateTime
-	 * @param 		string		$type		The php type to convert
-	 * @return 		string					The XSD type.
+	 * @param string $type The php type to convert
+	 * @return string The XSD type.
 	 */
-	private function convertType($type)
+	private function convertType($type): string
 	{
-		 switch ($type) {
-             case 'string':
-             case 'str':
-                 return 'xsd:string';
-                 break;
-             case 'int':
-             case 'integer':
-                 return 'xsd:int';
-                 break;
-             case 'float':
-             case 'double':
-                 return 'xsd:float';
-                 break;
-             case 'boolean':
-             case 'bool':
-                 return 'xsd:boolean';
-                 break;
-             case 'date':
-                 return 'xsd:date';
-                 break;
-             case 'time':
-                 return 'xsd:time';
-                 break;
-             case 'dateTime':
-                 return 'xsd:dateTime';
-                 break;
-             case 'array':
-                 return 'soap-enc:Array';
-                 break;
-             case 'object':
-                 return 'xsd:struct';
-                 break;
-             case 'mixed':
-                 return 'xsd:anyType';
-                 break;
-             case 'void':
-                 return '';
-             default:
-             	 if(strpos($type, '[]'))  // if it is an array
-             	 {
-             	 	$className = substr($type, 0, strlen($type) - 2);
-             	 	$type = $className . 'Array';
-             	 	$this->types[$type] = '';
-             	 	$this->convertType($className);
-             	 }
-             	 else
-             	 {
-             	 	 if(!isset($this->types[$type]))
-	             		$this->extractClassProperties($type);
-             	 }
-                 return 'tns:' . $type;
-         }
+		switch ($type) {
+			case 'string':
+			case 'str':
+				return 'xsd:string';
+				break;
+			case 'int':
+			case 'integer':
+				return 'xsd:int';
+				break;
+			case 'float':
+			case 'double':
+				return 'xsd:float';
+				break;
+			case 'boolean':
+			case 'bool':
+				return 'xsd:boolean';
+				break;
+			case 'date':
+				return 'xsd:date';
+				break;
+			case 'time':
+				return 'xsd:time';
+				break;
+			case 'dateTime':
+				return 'xsd:dateTime';
+				break;
+			case 'array':
+				return 'soap-enc:Array';
+				break;
+			case 'object':
+				return 'xsd:struct';
+				break;
+			case 'mixed':
+				return 'xsd:anyType';
+				break;
+			case 'void':
+				return '';
+			default:
+				if (strpos($type, '[]')) {  // if it is an array
+					$className = substr($type, 0, strlen($type) - 2);
+					$type = $className . 'Array';
+					$this->types[$type] = '';
+					$this->convertType($className);
+				} else {
+					if (!isset($this->types[$type])) {
+						$this->extractClassProperties($type);
+					}
+				}
+				return 'tns:' . $type;
+		}
 	}
 
 	/**
@@ -298,7 +284,7 @@ class WsdlGenerator
 	 * about the variables manually. Thanks heaps to Cristian Losada for implementing this.
 	 * @param string $className The name of the class
 	 */
-	private function extractClassProperties($className)
+	private function extractClassProperties($className): void
 	{
 		/**
 		 * modified by Qiang Xue, Jan. 2, 2007
@@ -307,33 +293,28 @@ class WsdlGenerator
 		 */
 		$reflection = new \ReflectionClass($className);
 		$properties = $reflection->getProperties();
-		foreach($properties as $property)
-		{
+		foreach ($properties as $property) {
 			$comment = $property->getDocComment();
-			if(strpos($comment, '@soapproperty') !== false)
-			{
-				if(preg_match('/@var\s+([\w\.]+(\[\s*\])?)\s*?\$(.*)$/mi',$comment,$matches))
-				{
+			if (strpos($comment, '@soapproperty') !== false) {
+				if (preg_match('/@var\s+([\w\.]+(\[\s*\])?)\s*?\$(.*)$/mi', $comment, $matches)) {
 					// support nillable, minOccurs, maxOccurs attributes
-					$nillable=$minOccurs=$maxOccurs=false;
-					if(preg_match('/{(.+)}/',$matches[3],$attr))
-					{
-						$matches[3]=str_replace($attr[0],'',$matches[3]);
-						if(preg_match_all('/((\w+)\s*=\s*(\w+))/mi',$attr[1],$attr))
-						{
-							foreach($attr[2] as $id=>$prop)
-							{
-								if(strcasecmp($prop,'nillable')===0)
-									$nillable=$attr[3][$id] ? 'true' : 'false';
-								elseif(strcasecmp($prop,'minOccurs')===0)
-									$minOccurs=(int)$attr[3][$id];
-								elseif(strcasecmp($prop,'maxOccurs')===0)
-									$maxOccurs=(int)$attr[3][$id];
+					$nillable = $minOccurs = $maxOccurs = false;
+					if (preg_match('/{(.+)}/', $matches[3], $attr)) {
+						$matches[3] = str_replace($attr[0], '', $matches[3]);
+						if (preg_match_all('/((\w+)\s*=\s*(\w+))/mi', $attr[1], $attr)) {
+							foreach ($attr[2] as $id => $prop) {
+								if (strcasecmp($prop, 'nillable') === 0) {
+									$nillable = $attr[3][$id] ? 'true' : 'false';
+								} elseif (strcasecmp($prop, 'minOccurs') === 0) {
+									$minOccurs = (int) $attr[3][$id];
+								} elseif (strcasecmp($prop, 'maxOccurs') === 0) {
+									$maxOccurs = (int) $attr[3][$id];
+								}
 							}
 						}
 					}
 
-					$param = array();
+					$param = [];
 					$param['type'] = $this->convertType($matches[1]);
 					$param['name'] = trim($matches[3]);
 					$param['nil'] = $nillable;
