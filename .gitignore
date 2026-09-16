@@ -1,0 +1,32 @@
+# Dependencies
+/composer.lock
+/vendor
+
+# Local configuration
+/phpstan.neon
+
+# Caches
+/.php-cs-fixer.cache
+/.phpunit.cache
+/.phpunit.result.cache
+/.phpstan.cache
+
+# Build output
+/build
+
+# IDEs and editors
+/.idea
+/.project
+/.buildpath
+/.settings
+/nbproject
+
+# OS files
+.DS_Store
+
+# AI agent files
+**/AGENTS.md
+!/AGENTS.md
+**/CLAUDE.md
+!/CLAUDE.md
+/.claude

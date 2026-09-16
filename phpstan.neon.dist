@@ -1,0 +1,14 @@
+parameters:
+    phpVersion: 80100 # the floor composer.json declares
+    level: 6
+    paths:
+        - src
+        - tests
+    excludePaths:
+        analyseAndScan:
+            - tests/unit/Fixtures/*
+    scanFiles:
+        # The fixture doc comments are test data, so the fixtures are read for
+        # their declarations and not analysed.
+        - tests/unit/Fixtures/types.php
+        - tests/unit/Fixtures/providers.php

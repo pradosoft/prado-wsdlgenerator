@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Wsdl file.
  *
@@ -12,7 +13,6 @@
  *
  * @author Marcus Nyeholt		<tanus@users.sourceforge.net>
  * @author Wei Zhuo <weizhuo[at]gmail[dot]com>
- * @package Prado\Wsdl
  */
 
 namespace Prado\Wsdl;
@@ -27,75 +27,140 @@ namespace Prado\Wsdl;
 class Wsdl
 {
 	/**
-	 * The name of the service (usually the classname)
-	 * @var 	string
+	 * The name of the service, usually the class name.
+	 * @var string
 	 */
-	private $serviceName;
+	private string $serviceName;
 
 	/**
-	 * The URI to find the service at. If empty, the current
-	 * uri will be used (minus any query string)
+	 * The URI the service is found at. An empty URI falls back to the current
+	 * request, without its query string.
+	 * @var string
 	 */
-	private $serviceUri;
+	private string $serviceUri;
 
 	/**
-	 * The complex types declarations
-	 * @var 	\ArrayObject
+	 * The complexType declarations, indexed by type name. An array type holds an
+	 * empty string, because its element is derived from its name.
+	 * @var \ArrayObject<string, array<int, array<string, mixed>>|string>
 	 */
-	private $types;
+	private \ArrayObject $types;
 
 	/**
-	 * A collection of SOAP operations
-	 * @var 	array
+	 * The SOAP operations of the service.
+	 * @var WsdlOperation[]
 	 */
-	private $operations=array();
+	private array $operations = [];
 
 	/**
-	 * Wsdl DOMDocument that's generated.
+	 * The generated wsdl document.
+	 * @var ?string
 	 */
-	private $wsdl = null;
+	private ?string $wsdl = null;
 
 	/**
-	 * The definitions created for the WSDL
+	 * The definitions element the document is built into.
+	 * @var ?\DOMElement
 	 */
-	private $definitions = null;
+	private ?\DOMElement $definitions = null;
 
 	/**
-	 * The target namespace variable?
+	 * The namespace the generated types and messages belong to.
+	 * @var string
 	 */
-	private $targetNamespace ='';
+	private string $targetNamespace = '';
 
 	/**
-	 * The binding style (default at the moment)
+	 * The binding style. Only rpc is generated.
+	 * @var string
 	 */
-	private $bindingStyle = 'rpc';
+	private string $bindingStyle = self::STYLE_RPC;
 
 	/**
-	 * The binding uri
+	 * The transport the binding uses.
+	 * @var string
 	 */
-	private $bindingTransport = 'http://schemas.xmlsoap.org/soap/http';
-
-	private $_encoding='';
-
-	private static $_primitiveTypes = array('string', 'int', 'float', 'boolean', 'date', 'time', 'dateTime');
+	private string $bindingTransport = 'http://schemas.xmlsoap.org/soap/http';
 
 	/**
-	 * Creates a new Wsdl thing
-	 * @param 	string		$name the name of the service.
-	 * @param 	string		$serviceUri		The URI of the service that handles this WSDL
-	 * @param string character encoding
+	 * The character encoding declared by the document.
+	 * @var string
 	 */
-	public function __construct($name, $serviceUri='', $encoding='')
+	private string $_encoding = '';
+
+	/**
+	 * Maps the type names accepted in a doc comment to their XSD equivalent. The
+	 * aliases match the ones WsdlGenerator::convertType() accepts.
+	 * @var array<string, string>
+	 */
+	private static array $_primitiveTypes = [
+		'string' => 'xsd:string',
+		'str' => 'xsd:string',
+		'int' => 'xsd:int',
+		'integer' => 'xsd:int',
+		'float' => 'xsd:float',
+		'double' => 'xsd:float',
+		'boolean' => 'xsd:boolean',
+		'bool' => 'xsd:boolean',
+		'date' => 'xsd:date',
+		'time' => 'xsd:time',
+		'dateTime' => 'xsd:dateTime',
+		'mixed' => 'xsd:anyType',
+		'object' => 'xsd:anyType',
+	];
+
+	/**
+	 * The production an encoding name follows in an XML declaration.
+	 */
+	private const ENCODING_PATTERN = '/^[A-Za-z][A-Za-z0-9._-]*$/';
+
+	/**
+	 * Remote procedure call style with SOAP encoding, as WSDL 1.1 and SOAP 1.1
+	 * define it. A message carries one part per parameter, typed. This is what the
+	 * generator has always produced, and remains the default.
+	 * @since 1.2
+	 */
+	public const STYLE_RPC = 'rpc';
+
+	/**
+	 * Document style with literal encoding, following the wrapped convention of
+	 * WS-I Basic Profile 1.1, which prohibits SOAP encoding (R2706). A message
+	 * carries one part naming a global element that wraps the parameters.
+	 * @since 1.2
+	 */
+	public const STYLE_DOCUMENT = 'document';
+
+	/**
+	 * Creates a new wsdl document.
+	 * @param mixed $name The name of the service, a string, or a value coerced to
+	 * one as interpolation coerced it before the properties carried types
+	 * @param string $serviceUri The URI of the service that handles this WSDL
+	 * @param mixed $encoding The character encoding of the document, coerced the
+	 * same way
+	 * @param string $style The binding style, {@see STYLE_RPC} or {@see STYLE_DOCUMENT}
+	 * @throws \InvalidArgumentException if the style is neither
+	 */
+	public function __construct($name, $serviceUri = '', $encoding = '', $style = self::STYLE_RPC)
 	{
-		$this->_encoding = $encoding;
-		$this->serviceName = $name;
-		$protocol=(isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS']!=='off'))?'https://':'http://';
-		if ($serviceUri === '') $serviceUri = $protocol.$_SERVER['HTTP_HOST'].$_SERVER['PHP_SELF'];
+		$this->setBindingStyle($style);
+		// The properties carry types, and the document was assembled by
+		// interpolation before they did. Coerce at the boundary, so a caller that
+		// passed something other than a string still gets what it always got.
+		$this->_encoding = (string) $encoding;
+		$this->serviceName = (string) $name;
+		$protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] !== 'off')) ? 'https://' : 'http://';
+		if ($serviceUri === '') {
+			$serviceUri = $protocol . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['PHP_SELF'] ?? '');
+		}
 		$this->serviceUri = str_replace('&amp;', '&', $serviceUri);
 		$this->types = new \ArrayObject();
-		$this->targetNamespace = 'urn:'.$name.'wsdl';
+		$this->targetNamespace = 'urn:' . $this->serviceName . 'wsdl';
 	}
 
+	/**
+	 * Builds the document and returns it.
+	 * @return string The generated wsdl
+	 */
 	public function getWsdl()
 	{
 		$this->buildWsdl();
@@ -103,23 +168,71 @@ class Wsdl
 	}
 
 	/**
+	 * Returns the binding style of the document.
+	 * @return string {@see STYLE_RPC} or {@see STYLE_DOCUMENT}
+	 * @since 1.2
+	 */
+	public function getBindingStyle()
+	{
+		return $this->bindingStyle;
+	}
+
+	/**
+	 * Sets the binding style of the document.
+	 * @param string $value {@see STYLE_RPC} or {@see STYLE_DOCUMENT}
+	 * @throws \InvalidArgumentException if the style is neither
+	 * @return void
+	 * @since 1.2
+	 */
+	public function setBindingStyle($value)
+	{
+		if ($value !== self::STYLE_RPC && $value !== self::STYLE_DOCUMENT) {
+			throw new \InvalidArgumentException('"' . $value . '" is not a binding style.');
+		}
+
+		$this->bindingStyle = $value;
+	}
+
+	/**
+	 * Tells whether the document follows the document and literal style.
+	 * @return bool Whether the style is {@see STYLE_DOCUMENT}
+	 * @since 1.2
+	 */
+	protected function isDocumentStyle()
+	{
+		return $this->bindingStyle === self::STYLE_DOCUMENT;
+	}
+
+	/**
 	 * Generates the WSDL file into the $this->wsdl variable
+	 * @throws \InvalidArgumentException if the encoding is not an XML encoding name
+	 * @throws \RuntimeException if the generated document does not parse
+	 * @return void
 	 */
 	protected function buildWsdl()
 	{
-		$encoding = $this->_encoding==='' ? '' : 'encoding="'.$this->_encoding.'"';
+		$encoding = '';
+		if ($this->_encoding !== '') {
+			if (!preg_match(self::ENCODING_PATTERN, $this->_encoding)) {
+				throw new \InvalidArgumentException('"' . $this->_encoding . '" is not an XML encoding name.');
+			}
+			$encoding = 'encoding="' . $this->_encoding . '"';
+		}
 
-		$xml = '<?xml version="1.0" '.$encoding.'?>
-                 <definitions name="'.$this->serviceName.'" targetNamespace="'.$this->targetNamespace.'"
+		$name = self::escapeAttribute($this->serviceName);
+		$targetNamespace = self::escapeAttribute($this->targetNamespace);
+
+		$xml = '<?xml version="1.0" ' . $encoding . '?>
+                 <definitions name="' . $name . '" targetNamespace="' . $targetNamespace . '"
                      xmlns="http://schemas.xmlsoap.org/wsdl/"
-                     xmlns:tns="'.$this->targetNamespace.'"
+                     xmlns:tns="' . $targetNamespace . '"
                      xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
                      xmlns:xsd="http://www.w3.org/2001/XMLSchema"
 					 xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
                      xmlns:soap-enc="http://schemas.xmlsoap.org/soap/encoding/"></definitions>';
 
 		$dom = new \DOMDocument();
-		$dom->loadXml($xml);
+		$this->loadOrFail($dom, $xml);
 		$this->definitions = $dom->documentElement;
 
 		$this->addTypes($dom);
@@ -130,88 +243,229 @@ class Wsdl
 		$this->addService($dom);
 
 		$this->wsdl = $dom->saveXML();
+
+		// A namespace URI is serialized as it was given, so a service name
+		// carrying a character a URI cannot hold reaches the caller as a document
+		// that no longer parses. Escaping does not reach a namespace declaration.
+		$this->loadOrFail(new \DOMDocument(), $this->wsdl);
+	}
+
+	/**
+	 * Parses a document, and reports the service rather than the parser when it
+	 * does not parse.
+	 * @param \DOMDocument $dom The document to parse into
+	 * @param string $xml The document to parse
+	 * @throws \RuntimeException if the document does not parse
+	 * @return void
+	 * @since 1.2
+	 */
+	private function loadOrFail(\DOMDocument $dom, $xml)
+	{
+		if (!@$dom->loadXml($xml)) {
+			throw new \RuntimeException('The wsdl of the "' . $this->serviceName . '" service does not parse. Its name is not usable in a document.');
+		}
 	}
 
 	/**
 	 * Adds complexType definitions to the document
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	public function addTypes(\DOMDocument $dom)
 	{
-		if (!count($this->types)) return;
+		if (!count($this->types) && !$this->isDocumentStyle()) {
+			return;
+		}
 		$types = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:types');
 		$schema = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:schema');
 		$schema->setAttribute('targetNamespace', $this->targetNamespace);
-		foreach($this->types as $type => $elements)
-		{
+		if ($this->isDocumentStyle()) {
+			$schema->setAttribute('elementFormDefault', 'qualified');
+		}
+		foreach ($this->types as $type => $elements) {
 			$complexType = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:complexType');
 			$complexType->setAttribute('name', $type);
-			if(substr($type, strlen($type) - 5, 5) == 'Array')  // if it's an array
-			{
+			if (substr($type, strlen($type) - 5, 5) == 'Array') {  // if it's an array
 				$sequence = $dom->createElement("xsd:sequence");
 
 				$singularType = substr($type, 0, strlen($type) - 5);
 				$e = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
 				$e->setAttribute('name', $singularType);
-				$e->setAttribute('type', sprintf('tns:%s',$singularType));
-				$e->setAttribute('minOccurs','0');
-				$e->setAttribute('maxOccurs','unbounded');
+				$e->setAttribute('type', $this->getArrayElementType($type));
+				$e->setAttribute('minOccurs', '0');
+				$e->setAttribute('maxOccurs', 'unbounded');
 				$sequence->appendChild($e);
 				$complexType->appendChild($sequence);
-			}
-			else
-			{
-				$all = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:all');
-				foreach($elements as $elem)
-				{
+			} else {
+				$compositor = $this->needsSequence($elements) ? 'xsd:sequence' : 'xsd:all';
+				$all = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', $compositor);
+				foreach ($elements as $elem) {
 					$e = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
 					$e->setAttribute('name', $elem['name']);
 					$e->setAttribute('type', $elem['type']);
-					if($elem['minOc']!==false)
-						$e->setAttribute('minOccurs',$elem['minOc']);
-					if($elem['maxOc']!==false)
-						$e->setAttribute('maxOccurs',$elem['maxOc']);
-					if($elem['nil']!==false)
-						$e->setAttribute('nillable',$elem['nil']);
+					if ($elem['minOc'] !== false) {
+						$e->setAttribute('minOccurs', $elem['minOc']);
+					}
+					if ($elem['maxOc'] !== false) {
+						$e->setAttribute('maxOccurs', $elem['maxOc']);
+					}
+					if ($elem['nil'] !== false) {
+						$e->setAttribute('nillable', $elem['nil']);
+					}
 					$all->appendChild($e);
 				}
 				$complexType->appendChild($all);
 			}
 			$schema->appendChild($complexType);
-			$types->appendChild($schema);
 		}
 
+		if ($this->isDocumentStyle()) {
+			$this->addMessageElements($dom, $schema);
+		}
+
+		$types->appendChild($schema);
 		$this->definitions->appendChild($types);
 	}
 
 	/**
-	 * @return string prefix 'xsd:' for primitive array types, otherwise, 'tns:'
+	 * Escapes a value for an XML attribute. The opening of the document is
+	 * assembled as text, so a value carrying a markup character reaches the parser
+	 * as markup unless it is escaped first. The replacement names no charset,
+	 * because the document is not always UTF-8.
+	 * @param string $value The value to escape
+	 * @return string The escaped value
+	 * @since 1.2
+	 */
+	private static function escapeAttribute($value)
+	{
+		return str_replace(
+			['&', '<', '>', '"', "'"],
+			['&amp;', '&lt;', '&gt;', '&quot;', '&apos;'],
+			(string) $value
+		);
+	}
+
+	/**
+	 * Adds the global elements a document and literal message names. The wrapped
+	 * convention gives the request the name of the operation and the response that
+	 * name followed by Response, each wrapping the parts in a sequence.
+	 * @param \DOMDocument $dom The document to add to
+	 * @param \DOMElement $schema The schema the elements belong to
+	 * @return void
+	 * @since 1.2
+	 */
+	protected function addMessageElements(\DOMDocument $dom, \DOMElement $schema)
+	{
+		foreach ($this->operations as $operation) {
+			$name = $operation->getName();
+			$input = $operation->getInputMessage();
+			$output = $operation->getOutputMessage();
+
+			$schema->appendChild($this->createMessageElement($dom, $name, $input === null ? [] : $input->getParts()));
+			$schema->appendChild($this->createMessageElement($dom, $name . 'Response', $output === null ? [] : $output->getParts()));
+		}
+	}
+
+	/**
+	 * Builds the global element that wraps the parts of one message.
+	 * @param \DOMDocument $dom The document to create in
+	 * @param string $name The name of the element
+	 * @param array<int, array<string, string>> $parts The parts to wrap
+	 * @return \DOMElement The element
+	 * @since 1.2
+	 */
+	protected function createMessageElement(\DOMDocument $dom, $name, array $parts)
+	{
+		$element = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
+		$element->setAttribute('name', $name);
+
+		$complexType = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:complexType');
+		$sequence = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:sequence');
+
+		foreach ($parts as $part) {
+			if (empty($part['name']) || empty($part['type'])) {
+				continue;
+			}
+			$child = $dom->createElementNS('http://www.w3.org/2001/XMLSchema', 'xsd:element');
+			$child->setAttribute('name', $part['name']);
+			$child->setAttribute('type', $part['type']);
+			$sequence->appendChild($child);
+		}
+
+		$complexType->appendChild($sequence);
+		$element->appendChild($complexType);
+		return $element;
+	}
+
+	/**
+	 * Tells whether a complexType has to hold its elements in a sequence. An
+	 * xsd:all holds each element at most once, so an occurrence count above one
+	 * is only valid in an xsd:sequence.
+	 * @param array<int, array<string, mixed>>|string $elements The elements of the type
+	 * @return bool Whether a sequence is required
+	 * @since 1.2
+	 */
+	protected function needsSequence($elements)
+	{
+		foreach ((array) $elements as $element) {
+			foreach (['minOc', 'maxOc'] as $key) {
+				$count = $element[$key] ?? false;
+				if ($count === 'unbounded' || (is_numeric($count) && (int) $count > 1)) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Resolves the element type of an array complexType. A primitive element
+	 * takes its XSD type, anything else is a complexType in the target namespace.
+	 * @param string $type The name of the array complexType, ending in 'Array'
+	 * @return string The qualified type of the array's element
+	 * @since 1.2
+	 */
+	protected function getArrayElementType($type)
+	{
+		$elementType = substr($type, 0, strlen($type) - 5);
+		return self::$_primitiveTypes[$elementType] ?? 'tns:' . $elementType;
+	}
+
+	/**
+	 * Resolves the namespace prefix of an array complexType's element.
+	 * @deprecated 1.2 use {@link getArrayElementType}, which resolves the whole type name
+	 * @param string $type The name of the array complexType, ending in 'Array'
+	 * @return string 'xsd:' for a primitive element type, otherwise 'tns:'
 	 */
 	protected function getArrayTypePrefix($type)
 	{
 		$elementType = substr($type, 0, strlen($type) - 5);
-		return in_array($elementType, self::$_primitiveTypes) ? 'xsd:' : 'tns:';
+		return isset(self::$_primitiveTypes[$elementType]) ? 'xsd:' : 'tns:';
 	}
 
 	/**
 	 * Add messages for the service
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addMessages(\DOMDocument $dom)
 	{
 		foreach ($this->operations as $operation) {
+			$operation->setBindingStyle($this->bindingStyle);
 			$operation->setMessageElements($this->definitions, $dom);
 		}
 	}
 
 	/**
 	 * Add the port types for the service
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addPortTypes(\DOMDocument $dom)
 	{
 		$portType = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:portType');
-		$portType->setAttribute('name', $this->serviceName.'PortType');
+		$portType->setAttribute('name', $this->serviceName . 'PortType');
 
 		$this->definitions->appendChild($portType);
 		foreach ($this->operations as $operation) {
@@ -222,13 +476,14 @@ class Wsdl
 
 	/**
 	 * Add the bindings for the service
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addBindings(\DOMDocument $dom)
 	{
 		$binding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:binding');
-		$binding->setAttribute('name', $this->serviceName.'Binding');
-		$binding->setAttribute('type', 'tns:'.$this->serviceName.'PortType');
+		$binding->setAttribute('name', $this->serviceName . 'Binding');
+		$binding->setAttribute('type', 'tns:' . $this->serviceName . 'PortType');
 
 		$soapBinding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:binding');
 		$soapBinding->setAttribute('style', $this->bindingStyle);
@@ -245,16 +500,17 @@ class Wsdl
 
 	/**
 	 * Add the service definition
-	 * @param		DOMDocument 		$dom		The document to add to
+	 * @param \DOMDocument $dom The document to add to
+	 * @return void
 	 */
 	protected function addService(\DOMDocument $dom)
 	{
 		$service = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:service');
-		$service->setAttribute('name', $this->serviceName.'Service');
+		$service->setAttribute('name', $this->serviceName . 'Service');
 
 		$port = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:port');
-		$port->setAttribute('name', $this->serviceName.'Port');
-		$port->setAttribute('binding', 'tns:'.$this->serviceName.'Binding');
+		$port->setAttribute('name', $this->serviceName . 'Port');
+		$port->setAttribute('binding', 'tns:' . $this->serviceName . 'Binding');
 
 		$soapAddress = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:address');
 		$soapAddress->setAttribute('location', $this->serviceUri);
@@ -267,7 +523,8 @@ class Wsdl
 
 	/**
 	 * Adds an operation to have port types and bindings output
-	 * @param 		WsdlOperation		$operation 		The operation to add
+	 * @param WsdlOperation $operation The operation to add
+	 * @return void
 	 */
 	public function addOperation(WsdlOperation $operation)
 	{
@@ -276,8 +533,10 @@ class Wsdl
 
 	/**
 	 * Adds complexTypes to the wsdl
-	 * @param string 	$type 	Name of the type
-	 * @param Array		$elements	Elements of the type (each one is an associative array('name','type'))
+	 * @param string $type Name of the type
+	 * @param array<int, array<string, mixed>>|string $elements Elements of the type, each an
+	 * associative array of name and type, or an empty string for an array type
+	 * @return void
 	 */
 	public function addComplexType($type, $elements)
 	{

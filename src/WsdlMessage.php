@@ -1,4 +1,5 @@
 <?php
+
 /**
  * WsdlMessage file.
  *
@@ -12,7 +13,6 @@
  *
  * @author Marcus Nyeholt		<tanus@users.sourceforge.net>
  * @author Wei Zhuo <weizhuo[at]gmail[dot]com>
- * @package Prado\Wsdl
  */
 
 namespace Prado\Wsdl;
@@ -26,32 +26,35 @@ namespace Prado\Wsdl;
 class WsdlMessage
 {
 	/**
-	 * The name of this message
-	 * @var 	string
+	 * The name of this message.
+	 * @var string
 	 */
-	private $name;
+	private string $name;
 
 	/**
-	 * Represents the parameters for this message
-	 * @var 	array
+	 * The parameters of this message, each an array of name, type and desc.
+	 * @var array<int, array<string, string>>
 	 */
-	private $parts;
+	private array $parts;
 
 	/**
-	 * Creates a new message
-	 * @param 	string		$messageName	The name of the message
-	 * @param 	string		$parts			The parts of this message
+	 * Creates a new message.
+	 * @param mixed $messageName The name of the message, a string, or a value
+	 * coerced to one as interpolation coerced it before the properties carried types
+	 * @param mixed $parts The parts of this message, an array of name, type and
+	 * desc arrays, or a value coerced to an array
 	 */
 	public function __construct($messageName, $parts)
 	{
-		$this->name = $messageName;
-		$this->parts = $parts;
-
+		// The properties carry types, and did not before. Coerce at the boundary,
+		// so a caller that passed something else still gets what it always got.
+		$this->name = (string) $messageName;
+		$this->parts = (array) $parts;
 	}
 
 	/**
-	 * Gets the name of this message
-	 * @return 		string		The name
+	 * Gets the name of this message.
+	 * @return string The name
 	 */
 	public function getName()
 	{
@@ -59,8 +62,41 @@ class WsdlMessage
 	}
 
 	/**
-	 * Return the message as a DOM element
-	 * @param 		DOMDocument		$wsdl		The wsdl document the messages will be children of
+	 * Gets the parts of this message.
+	 * @return array<int, array<string, string>> The parts
+	 * @since 1.2
+	 */
+	public function getParts()
+	{
+		return $this->parts;
+	}
+
+	/**
+	 * Returns the message as a DOM element carrying one part naming a global
+	 * element, which is the single part a document and literal message holds.
+	 * @param \DOMDocument $dom The document the message is created in
+	 * @param string $elementName The global element the part names
+	 * @return \DOMElement The message element
+	 * @since 1.2
+	 */
+	public function getDocumentMessageElement(\DOMDocument $dom, $elementName)
+	{
+		$message = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:message');
+		$message->setAttribute('name', $this->name);
+
+		$part = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:part');
+		$part->setAttribute('name', 'parameters');
+		$part->setAttribute('element', 'tns:' . $elementName);
+		$message->appendChild($part);
+
+		return $message;
+	}
+
+	/**
+	 * Returns the message as a DOM element. A part with no type is left out,
+	 * which is how a void return produces a message with no parts.
+	 * @param \DOMDocument $dom The document the message is created in
+	 * @return \DOMElement The message element
 	 */
 	public function getMessageElement(\DOMDocument $dom)
 	{
@@ -68,7 +104,7 @@ class WsdlMessage
 		$message->setAttribute('name', $this->name);
 
 		foreach ($this->parts as $part) {
-			if (isset($part['name'])) {
+			if (isset($part['name']) && isset($part['type']) && $part['type'] !== '') {
 				$partElement = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:part');
 				$partElement->setAttribute('name', $part['name']);
 				$partElement->setAttribute('type', $part['type']);
