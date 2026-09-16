@@ -1,0 +1,225 @@
+<?php
+
+namespace Prado\Wsdl\Test\Unit;
+
+use DOMDocument;
+use Prado\Wsdl\Wsdl;
+use Prado\Wsdl\WsdlMessage;
+use Prado\Wsdl\WsdlOperation;
+
+class WsdlTest extends WsdlTestCase
+{
+	/**
+	 * Builds a document holding one operation.
+	 * @param string $name The service name
+	 * @param string $encoding The character encoding
+	 * @return Wsdl The document
+	 */
+	protected function newWsdl($name = 'Service', $encoding = 'UTF-8')
+	{
+		$wsdl = new Wsdl($name, 'http://example.com/soap', $encoding);
+		$operation = new WsdlOperation('op', 'An operation.');
+		$operation->setInputMessage(new WsdlMessage('opRequest', [['name' => 'a', 'type' => 'xsd:string']]));
+		$operation->setOutputMessage(new WsdlMessage('opResponse', [['name' => 'return', 'type' => 'xsd:string']]));
+		$wsdl->addOperation($operation);
+		return $wsdl;
+	}
+
+	/**
+	 * Parses the output of a document.
+	 * @param Wsdl $wsdl The document to read
+	 * @return DOMDocument The parsed document
+	 */
+	protected function parse(Wsdl $wsdl)
+	{
+		$dom = new DOMDocument();
+		$this->assertTrue($dom->loadXML($wsdl->getWsdl()));
+		return $dom;
+	}
+
+	public function testTheTargetNamespaceFollowsTheServiceName()
+	{
+		$dom = $this->parse($this->newWsdl('Payments'));
+		$this->assertSame('urn:Paymentswsdl', $dom->documentElement->getAttribute('targetNamespace'));
+		$this->assertSame('Payments', $dom->documentElement->getAttribute('name'));
+	}
+
+	public function testTheEncodingReachesTheDeclaration()
+	{
+		$this->assertStringContainsString('encoding="UTF-8"', $this->newWsdl('Service', 'UTF-8')->getWsdl());
+	}
+
+	public function testAnEmptyEncodingLeavesTheDeclarationBare()
+	{
+		$wsdl = $this->newWsdl('Service', '')->getWsdl();
+		$this->assertStringStartsWith('<?xml version="1.0"?>', $wsdl);
+		$this->assertStringNotContainsString('encoding=', substr($wsdl, 0, 40));
+	}
+
+	public function testTheServiceUriReachesTheAddress()
+	{
+		$dom = $this->parse($this->newWsdl());
+		$this->assertSame(['http://example.com/soap'], $this->attributes($dom, '//soap:address', 'location'));
+	}
+
+	public function testAnEmptyServiceUriFallsBackToTheRequest()
+	{
+		$server = $_SERVER;
+		$_SERVER['HTTPS'] = 'on';
+		$_SERVER['HTTP_HOST'] = 'example.org';
+		$_SERVER['PHP_SELF'] = '/soap.php';
+
+		try {
+			$wsdl = new Wsdl('Service', '', 'UTF-8');
+			$dom = $this->parse($wsdl);
+			$this->assertSame(['https://example.org/soap.php'], $this->attributes($dom, '//soap:address', 'location'));
+		} finally {
+			$_SERVER = $server;
+		}
+	}
+
+	public function testAnOffHttpsFallsBackToHttp()
+	{
+		$server = $_SERVER;
+		$_SERVER['HTTPS'] = 'off';
+		$_SERVER['HTTP_HOST'] = 'example.org';
+		$_SERVER['PHP_SELF'] = '/soap.php';
+
+		try {
+			$dom = $this->parse(new Wsdl('Service', '', 'UTF-8'));
+			$this->assertSame(['http://example.org/soap.php'], $this->attributes($dom, '//soap:address', 'location'));
+		} finally {
+			$_SERVER = $server;
+		}
+	}
+
+	public function testAnEncodedAmpersandIsRestoredInTheUri()
+	{
+		$wsdl = new Wsdl('Service', 'http://example.com/soap?a=1&amp;b=2', 'UTF-8');
+		$dom = $this->parse($wsdl);
+		$this->assertSame(['http://example.com/soap?a=1&b=2'], $this->attributes($dom, '//soap:address', 'location'));
+	}
+
+	public function testTheDocumentCarriesTheOperationThroughEverySection()
+	{
+		$dom = $this->parse($this->newWsdl());
+		$this->assertSame(['op'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
+		$this->assertSame(['op'], $this->attributes($dom, '//wsdl:binding/wsdl:operation', 'name'));
+		$this->assertSame(['opRequest', 'opResponse'], $this->attributes($dom, '//wsdl:message', 'name'));
+		$this->assertSame(['ServiceService'], $this->attributes($dom, '//wsdl:service', 'name'));
+		$this->assertSame(['ServicePort'], $this->attributes($dom, '//wsdl:port', 'name'));
+	}
+
+	public function testTheBindingCarriesTheStyleAndTransport()
+	{
+		$dom = $this->parse($this->newWsdl());
+		$binding = $this->query($dom, '//wsdl:binding/soap:binding')->item(0);
+		$this->assertSame('rpc', $binding->getAttribute('style'));
+		$this->assertSame('http://schemas.xmlsoap.org/soap/http', $binding->getAttribute('transport'));
+	}
+
+	public function testADocumentWithoutTypesDeclaresNoTypesSection()
+	{
+		$dom = $this->parse($this->newWsdl());
+		$this->assertCount(0, $this->query($dom, '//wsdl:types'));
+	}
+
+	public function testAComplexTypeBecomesAnAllOfItsElements()
+	{
+		$wsdl = $this->newWsdl();
+		$wsdl->addComplexType('Record', [
+			['name' => 'a', 'type' => 'xsd:string', 'nil' => false, 'minOc' => false, 'maxOc' => false],
+			['name' => 'b', 'type' => 'xsd:int', 'nil' => 'true', 'minOc' => 1, 'maxOc' => 4],
+		]);
+		$dom = $this->parse($wsdl);
+
+		$this->assertSame(['Record'], $this->complexTypes($dom));
+		$this->assertSame(['a', 'b'], $this->attributes($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element", 'name'));
+
+		$b = $this->query($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='b']")->item(0);
+		$this->assertSame('true', $b->getAttribute('nillable'));
+		$this->assertSame('1', $b->getAttribute('minOccurs'));
+		$this->assertSame('4', $b->getAttribute('maxOccurs'));
+
+		$a = $this->query($dom, "//xsd:complexType[@name='Record']/xsd:all/xsd:element[@name='a']")->item(0);
+		$this->assertFalse($a->hasAttribute('nillable'));
+		$this->assertFalse($a->hasAttribute('minOccurs'));
+		$this->assertFalse($a->hasAttribute('maxOccurs'));
+	}
+
+	public function testAnArrayTypeBecomesAnUnboundedSequence()
+	{
+		$wsdl = $this->newWsdl();
+		$wsdl->addComplexType('RecordArray', '');
+		$dom = $this->parse($wsdl);
+
+		$element = $this->query($dom, "//xsd:complexType[@name='RecordArray']/xsd:sequence/xsd:element")->item(0);
+		$this->assertSame('Record', $element->getAttribute('name'));
+		$this->assertSame('tns:Record', $element->getAttribute('type'));
+		$this->assertSame('0', $element->getAttribute('minOccurs'));
+		$this->assertSame('unbounded', $element->getAttribute('maxOccurs'));
+	}
+
+	/**
+	 * An array of a primitive used to declare its element as tns:<type>, which
+	 * resolves to nothing, so the client lost the type.
+	 */
+	public function testAnArrayOfAPrimitiveTakesTheXsdType()
+	{
+		$wsdl = $this->newWsdl();
+		$wsdl->addComplexType('stringArray', '');
+		$dom = $this->parse($wsdl);
+
+		$element = $this->query($dom, "//xsd:complexType[@name='stringArray']/xsd:sequence/xsd:element")->item(0);
+		$this->assertSame('xsd:string', $element->getAttribute('type'));
+	}
+
+	/**
+	 * @dataProvider elementTypeProvider
+	 * @param string $type The array complexType name
+	 * @param string $expected The type its element takes
+	 */
+	public function testGetArrayElementTypeResolvesEveryAlias($type, $expected)
+	{
+		$this->assertSame($expected, $this->callProtected($this->newWsdl(), 'getArrayElementType', [$type]));
+	}
+
+	public static function elementTypeProvider()
+	{
+		return [
+			['stringArray', 'xsd:string'],
+			['strArray', 'xsd:string'],
+			['intArray', 'xsd:int'],
+			['integerArray', 'xsd:int'],
+			['floatArray', 'xsd:float'],
+			['doubleArray', 'xsd:float'],
+			['booleanArray', 'xsd:boolean'],
+			['boolArray', 'xsd:boolean'],
+			['dateArray', 'xsd:date'],
+			['timeArray', 'xsd:time'],
+			['dateTimeArray', 'xsd:dateTime'],
+			['mixedArray', 'xsd:anyType'],
+			['objectArray', 'xsd:struct'],
+			['RecordArray', 'tns:Record'],
+		];
+	}
+
+	/**
+	 * @dataProvider typePrefixProvider
+	 * @param string $type The array complexType name
+	 * @param string $expected The prefix its element takes
+	 */
+	public function testTheDeprecatedPrefixStillAnswersForBothKinds($type, $expected)
+	{
+		$this->assertSame($expected, $this->callProtected($this->newWsdl(), 'getArrayTypePrefix', [$type]));
+	}
+
+	public static function typePrefixProvider()
+	{
+		return [
+			['stringArray', 'xsd:'],
+			['boolArray', 'xsd:'],
+			['RecordArray', 'tns:'],
+		];
+	}
+}

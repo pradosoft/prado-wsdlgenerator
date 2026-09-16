@@ -1,8 +1,12 @@
 <?php
 
+// The doc comments of the fixtures are test data. Normalizing them would
+// rewrite the type aliases the tests assert on, and attaching a file comment
+// to the class below it would change what the generator reads.
 $finder = PhpCsFixer\Finder::create()
 	->exclude('build/')
 	->exclude('vendor/')
+	->notPath('#^tests/unit/Fixtures/#')
 	->in(__DIR__);
 
 $config = new PhpCsFixer\Config();
