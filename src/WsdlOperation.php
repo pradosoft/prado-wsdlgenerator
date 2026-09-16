@@ -51,13 +51,16 @@ class WsdlOperation
 
 	/**
 	 * Creates a new operation.
-	 * @param string $name The name of the operation
-	 * @param string $doc The documentation of the operation
+	 * @param mixed $name The name of the operation, a string, or a value coerced
+	 * to one as interpolation coerced it before the properties carried types
+	 * @param mixed $doc The documentation of the operation, coerced the same way
 	 */
 	public function __construct($name, $doc = '')
 	{
-		$this->operationName = $name;
-		$this->documentation = $doc;
+		// The properties carry types, and did not before. Coerce at the boundary,
+		// so a caller that passed something else still gets what it always got.
+		$this->operationName = (string) $name;
+		$this->documentation = (string) $doc;
 	}
 
 	/**

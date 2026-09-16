@@ -39,14 +39,17 @@ class WsdlMessage
 
 	/**
 	 * Creates a new message.
-	 * @param string $messageName The name of the message
-	 * @param array<int, array<string, string>> $parts The parts of this message
+	 * @param mixed $messageName The name of the message, a string, or a value
+	 * coerced to one as interpolation coerced it before the properties carried types
+	 * @param mixed $parts The parts of this message, an array of name, type and
+	 * desc arrays, or a value coerced to an array
 	 */
 	public function __construct($messageName, $parts)
 	{
-		$this->name = $messageName;
-		$this->parts = $parts;
-
+		// The properties carry types, and did not before. Coerce at the boundary,
+		// so a caller that passed something else still gets what it always got.
+		$this->name = (string) $messageName;
+		$this->parts = (array) $parts;
 	}
 
 	/**

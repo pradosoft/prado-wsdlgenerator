@@ -229,6 +229,53 @@ class WsdlTest extends WsdlTestCase
 		];
 	}
 
+	/**
+	 * The properties carry types, and did not in 1.1, where the document was
+	 * assembled by interpolation. A caller passing something other than a string
+	 * still gets the document that interpolation produced.
+	 *
+	 * @dataProvider coercedNameProvider
+	 * @param mixed $name The service name to pass
+	 * @param string $expected The name the document carries
+	 */
+	public function testANameThatIsNotAStringIsCoerced($name, $expected): void
+	{
+		$raised = [];
+		set_error_handler(function ($severity, $message) use (&$raised) {
+			$raised[] = $message;
+			return true;
+		});
+
+		try {
+			$dom = $this->parse(new Wsdl($name, 'http://example.com/soap', 'UTF-8'));
+		} finally {
+			restore_error_handler();
+		}
+
+		$this->assertSame($expected, $dom->documentElement->getAttribute('name'));
+		$this->assertSame('urn:' . $expected . 'wsdl', $dom->documentElement->getAttribute('targetNamespace'));
+	}
+
+	/**
+	 * @return array<string, array{0: mixed, 1: string}> The name to pass and the name it becomes
+	 */
+	public static function coercedNameProvider(): array
+	{
+		return [
+			'null' => [null, ''],
+			'int' => [7, '7'],
+			'float' => [1.5, '1.5'],
+			'bool' => [true, '1'],
+			'array' => [['a'], 'Array'],
+		];
+	}
+
+	public function testAnEncodingThatIsNotAStringIsCoerced(): void
+	{
+		$wsdl = new Wsdl('Service', 'http://example.com/soap', null);
+		$this->assertStringStartsWith('<?xml version="1.0"?>', $wsdl->getWsdl());
+	}
+
 	public function testTheDocumentCarriesTheOperationThroughEverySection(): void
 	{
 		$dom = $this->parse($this->newWsdl());

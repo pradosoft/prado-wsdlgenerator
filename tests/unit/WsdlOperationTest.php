@@ -93,6 +93,22 @@ class WsdlOperationTest extends WsdlTestCase
 		}
 	}
 
+	/**
+	 * The properties carry types, and did not in 1.1. A null name reached the
+	 * document then, and still does.
+	 */
+	public function testANameThatIsNotAStringIsCoerced(): void
+	{
+		$operation = new WsdlOperation(null, null);
+		$operation->setInputMessage(new WsdlMessage('opRequest', []));
+		$operation->setOutputMessage(new WsdlMessage('opResponse', []));
+
+		$dom = new DOMDocument();
+		$dom = $this->hold($dom, $operation->getPortOperation($dom));
+
+		$this->assertSame('', $dom->documentElement->getAttribute('name'));
+	}
+
 	public function testSetMessageElementsAppendsBothMessages(): void
 	{
 		$dom = new DOMDocument();

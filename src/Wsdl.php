@@ -116,21 +116,26 @@ class Wsdl
 
 	/**
 	 * Creates a new wsdl document.
-	 * @param string $name The name of the service
+	 * @param mixed $name The name of the service, a string, or a value coerced to
+	 * one as interpolation coerced it before the properties carried types
 	 * @param string $serviceUri The URI of the service that handles this WSDL
-	 * @param string $encoding The character encoding of the document
+	 * @param mixed $encoding The character encoding of the document, coerced the
+	 * same way
 	 */
 	public function __construct($name, $serviceUri = '', $encoding = '')
 	{
-		$this->_encoding = $encoding;
-		$this->serviceName = $name;
+		// The properties carry types, and the document was assembled by
+		// interpolation before they did. Coerce at the boundary, so a caller that
+		// passed something other than a string still gets what it always got.
+		$this->_encoding = (string) $encoding;
+		$this->serviceName = (string) $name;
 		$protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] !== 'off')) ? 'https://' : 'http://';
 		if ($serviceUri === '') {
 			$serviceUri = $protocol . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['PHP_SELF'] ?? '');
 		}
 		$this->serviceUri = str_replace('&amp;', '&', $serviceUri);
 		$this->types = new \ArrayObject();
-		$this->targetNamespace = 'urn:' . $name . 'wsdl';
+		$this->targetNamespace = 'urn:' . $this->serviceName . 'wsdl';
 	}
 
 	/**

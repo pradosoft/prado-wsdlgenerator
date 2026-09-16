@@ -45,13 +45,15 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Requires PHP 8.1 or later, matching the floor of the Prado release that
   consumes this package. A project on an earlier PHP resolves 1.1.
-- The source follows Prado's code style, and its properties carry types. A
-  service name that is not a string, such as `null` or an array, now raises a
-  `TypeError` where it was previously coerced.
+- The source follows Prado's code style, and its properties carry types. The
+  constructors coerce what they are given, so a caller passing something other
+  than a string gets what interpolation gave it before.
 - An invalid encoding raises an `InvalidArgumentException`, and a service name
   no document can hold raises a `RuntimeException`. Both were fatal errors
   before, so nothing that worked stops working, but the type of the failure has
   changed.
+- `WsdlMessage::getName()` returns an empty string rather than null for a
+  message constructed with a null name.
 
 ### Deprecated
 
@@ -71,7 +73,9 @@ an array of a primitive, a method returning void, and a second service
 generated in one process each produce a document that differs from 1.1. In each
 case the 1.2 document is the correct one.
 
-Nothing was removed from the public or protected API.
+Nothing was removed from the public or protected API, and no input that this
+package accepted in 1.1 is refused. Several that were fatal before now either
+generate or raise a named exception.
 
 ## 1.1
 

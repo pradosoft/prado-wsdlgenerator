@@ -57,6 +57,36 @@ class WsdlMessageTest extends WsdlTestCase
 		$this->assertSame([], $this->parts($dom, 'opRequest'));
 	}
 
+	/**
+	 * The properties carry types, and did not in 1.1. A caller passing something
+	 * else still gets the message it always got.
+	 */
+	public function testANameThatIsNotAStringIsCoerced(): void
+	{
+		$this->assertSame('', (new WsdlMessage(null, []))->getName());
+		$this->assertSame('7', (new WsdlMessage(7, []))->getName());
+	}
+
+	/**
+	 * @dataProvider notPartsProvider
+	 * @param mixed $parts The parts to pass
+	 */
+	public function testPartsThatAreNotAnArrayCarryNoPart($parts): void
+	{
+		$dom = new DOMDocument();
+		$dom->appendChild((new WsdlMessage('opRequest', $parts))->getMessageElement($dom));
+
+		$this->assertSame([], $this->parts($dom, 'opRequest'));
+	}
+
+	/**
+	 * @return array<string, array{0: mixed}> The parts to pass
+	 */
+	public static function notPartsProvider(): array
+	{
+		return ['null' => [null], 'int' => [7], 'bool' => [true], 'string' => ['x']];
+	}
+
 	public function testAPartWithoutATypeIsLeftOut(): void
 	{
 		$dom = $this->build([['name' => 'return']]);
