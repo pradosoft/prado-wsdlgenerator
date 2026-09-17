@@ -33,8 +33,32 @@ abstract class WsdlTestCase extends TestCase
 		$generator->setStyle($style);
 		$generator->generateWsdl($className, $serviceUri, 'UTF-8');
 
-		$dom = new DOMDocument();
-		$this->assertTrue($dom->loadXML($generator->getWsdl()), 'the generated wsdl parses');
+		return $this->parseStrictly($generator->getWsdl());
+	}
+
+	/**
+	 * Parses a document, failing on anything the parser objects to. The parser
+	 * accepts a namespace URI it finds invalid and warns instead, and PRADO's
+	 * error handler turns that warning into an exception, so a warning is as
+	 * fatal as a document that does not parse.
+	 * @param string $xml The document to parse
+	 * @return DOMDocument The parsed document
+	 */
+	protected function parseStrictly($xml)
+	{
+		$previous = libxml_use_internal_errors(false);
+		set_error_handler(function ($severity, $message, $file, $line) {
+			throw new \ErrorException($message, 0, $severity, $file, $line);
+		});
+
+		try {
+			$dom = new DOMDocument();
+			$this->assertTrue($dom->loadXML($xml), 'the document parses');
+		} finally {
+			restore_error_handler();
+			libxml_use_internal_errors($previous);
+		}
+
 		return $dom;
 	}
 

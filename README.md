@@ -22,8 +22,8 @@ echo WsdlGenerator::generate(MyProvider::class, 'https://example.com/soap', 'UTF
 
 `generate()` reflects on the provider, reads the tags below, and returns the
 document. It throws an `InvalidArgumentException` if the encoding is not an XML
-encoding name, and a `RuntimeException` if the service name cannot be written
-into a document.
+encoding name, and a `RuntimeException` if the document does not parse or the
+parser objects to it, which a service name that is not a class name can cause.
 
 ## Doc tags
 
@@ -53,8 +53,10 @@ class MyProvider
 }
 ```
 
-A `[]` suffix declares the array form, which also declares the element type. Type names carry no
-namespace, matching the names `@param` and `@return` use.
+A `[]` suffix declares the array form, which also declares the element type. A type is named as
+`@param` and `@return` name it: a global class by its name, and a namespaced class by its fully
+qualified name, with or without the leading backslash. A short name resolves in the global
+namespace, not in the namespace of the provider.
 
 `@soapproperty` supports `nillable`, `minOccurs` and `maxOccurs`, written in braces after the
 variable name:
@@ -93,6 +95,24 @@ line or directly after the opening of the comment:
  */
 ```
 
+## Namespaced classes
+
+A namespace separator is valid in neither a URI nor an NCName, and the class
+name is written into both. The generator reflects on the class name as given and
+writes it with each separator replaced by a dot, keeping the full name so two
+classes sharing a short name do not collide. For `App\Soap\QuoteProvider`:
+
+| | Written as |
+|---|---|
+| `targetNamespace` | `urn:App.Soap.QuoteProviderwsdl` |
+| `wsdl:service` | `App.Soap.QuoteProviderService`, and the portType, binding and port likewise |
+| `@return App\Soap\Quote` | `tns:App.Soap.Quote`, declared as the complexType `App.Soap.Quote` |
+| `@return App\Soap\Quote[]` | `tns:App.Soap.QuoteArray`, an unbounded sequence of `App.Soap.Quote` |
+
+`Wsdl::documentName()` is the mapping. A global class name holds nothing the
+mapping touches, so the document of a global provider is what every earlier
+release produced.
+
 ## Binding style
 
 The generator emits remote procedure calls with SOAP encoding, as WSDL 1.1 and
@@ -120,11 +140,8 @@ major release may change that.
 
 ## Limitations
 
-- A type name carries no namespace. The generator reflects on the unqualified
-  name written in the doc comment, and writes it into the document as it stands.
-  A namespaced provider produces a `targetNamespace` that libxml reports is not
-  a valid URI, while still parsing the document.
-- The binding style is always `rpc`, and the body is always `encoded`.
+- A short type name resolves in the global namespace, not in the namespace of
+  the provider. A namespaced type is named by its fully qualified name.
 
 ## Development
 

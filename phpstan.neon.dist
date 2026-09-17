@@ -12,3 +12,4 @@ parameters:
         # their declarations and not analysed.
         - tests/unit/Fixtures/types.php
         - tests/unit/Fixtures/providers.php
+        - tests/unit/Fixtures/namespaced.php

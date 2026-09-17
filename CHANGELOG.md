@@ -23,9 +23,27 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `Wsdl::STYLE_RPC` remains the default and is unchanged.
 - A unit test suite, static analysis at level 6, and continuous integration on
   PHP 8.1, 8.2 and 8.3.
+- `@param`, `@return`, `@var` and `@soaptype` take a fully qualified class name,
+  with or without the leading separator, so a namespaced class is a type. A
+  short name resolves in the global namespace, as it always did.
+- `Wsdl::documentName()` maps a class name to the name the document carries.
 
 ### Fixed
 
+- A namespaced provider produced a target namespace holding a backslash, such
+  as `urn:App\Soap\QuoteProviderwsdl`, which is not a URI. libxml warned while
+  loading it, PRADO's error handler turned the warning into an exception, and
+  `TSoapServer::getWsdl()` threw for every namespaced provider. The separator
+  is now written as a dot wherever the name appears: the target namespace, the
+  service, portType, binding and port names, and the complexType names, so
+  `App\Soap\QuoteProvider` becomes `App.Soap.QuoteProvider`, valid as both a
+  URN and an NCName. The full name is kept, so two classes sharing a short name
+  do not collide. A global class produces the document it always did, byte for
+  byte, and the SOAP server and client of PHP accept the document of a
+  namespaced provider in both binding styles.
+- A document whose namespace the parser objected to was handed back regardless,
+  with the warning hidden. It is refused now, as a document that does not parse
+  is, naming what the parser said, and no warning reaches the error handler.
 - An array of a primitive declared its element as `tns:<type>`, a type no
   document declares. A schema validator rejects a reference that does not
   resolve. The element now takes its XSD type, and the aliases `str`, `integer`,
@@ -88,7 +106,9 @@ prose export a method.
 The generated document changes where the fixes above apply. A service returning
 an array of a primitive, a method returning void, and a second service
 generated in one process each produce a document that differs from 1.1. In each
-case the 1.2 document is the correct one.
+case the 1.2 document is the correct one. A namespaced provider produces a
+document whose names are dotted, where 1.1 produced one no client loaded; a
+global provider produces the document 1.1 did.
 
 Nothing was removed from the public or protected API, and no input that this
 package accepted in 1.1 is refused. Several that were fatal before now either

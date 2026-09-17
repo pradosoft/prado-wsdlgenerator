@@ -32,9 +32,7 @@ class WsdlTest extends WsdlTestCase
 	 */
 	protected function parse(Wsdl $wsdl)
 	{
-		$dom = new DOMDocument();
-		$this->assertTrue($dom->loadXML($wsdl->getWsdl()));
-		return $dom;
+		return $this->parseStrictly($wsdl->getWsdl());
 	}
 
 	public function testTheStyleDefaultsToRpcAndIsSettable(): void
@@ -167,45 +165,103 @@ class WsdlTest extends WsdlTestCase
 	}
 
 	/**
-	 * Parses a document whose namespace URI the parser objects to, and returns
-	 * both the document and what it said.
-	 * @param Wsdl $wsdl The document to read
-	 * @return array{0: DOMDocument, 1: array<int, string>} The parsed document and the distinct parser messages
+	 * A provider class is namespaced in any PSR-4 project, and a namespace
+	 * separator is valid in neither a URI nor an NCName. The document used to
+	 * carry it as it stood, so the parser warned about the target namespace,
+	 * and PRADO's error handler turned the warning into an exception for every
+	 * namespaced provider. Each separator is written as a dot instead.
 	 */
-	protected function parseWithComplaints(Wsdl $wsdl)
+	public function testANamespacedServiceNameIsWrittenWithDots(): void
 	{
-		$previous = libxml_use_internal_errors(true);
-		libxml_clear_errors();
+		$dom = $this->parse($this->newWsdl('Prado\\Wsdl\\Payments'));
 
-		try {
-			$dom = new DOMDocument();
-			$this->assertTrue($dom->loadXML($wsdl->getWsdl()), 'the document still parses');
-			$messages = array_values(array_unique(array_map(fn ($error) => trim($error->message), libxml_get_errors())));
-		} finally {
-			libxml_clear_errors();
-			libxml_use_internal_errors($previous);
-		}
-
-		return [$dom, $messages];
-	}
-
-	public function testAQuoteInTheServiceNameSurvivesTheDocument(): void
-	{
-		[$dom] = $this->parseWithComplaints($this->newWsdl('Pay"Go'));
-		$this->assertSame('Pay"Go', $dom->documentElement->getAttribute('name'));
+		$this->assertSame('Prado.Wsdl.Payments', $dom->documentElement->getAttribute('name'));
+		$this->assertSame('urn:Prado.Wsdl.Paymentswsdl', $dom->documentElement->getAttribute('targetNamespace'));
+		$this->assertSame('urn:Prado.Wsdl.Paymentswsdl', $dom->documentElement->lookupNamespaceURI('tns'));
+		$this->assertStringNotContainsString('\\', $dom->saveXML());
 	}
 
 	/**
-	 * A name holding a namespace separator reaches the document, and the urn
-	 * built from it is not a URI the parser accepts. It has always been so, and
-	 * every namespaced provider carries one.
+	 * Every name derived from the service name is an NCName, and every QName
+	 * referring to one names the element it stands for.
 	 */
-	public function testANamespacedServiceNameSurvivesTheDocument(): void
+	public function testEveryNameDerivedFromANamespacedServiceNameResolves(): void
 	{
-		[$dom, $messages] = $this->parseWithComplaints($this->newWsdl('Prado\\Wsdl\\Payments'));
+		$dom = $this->parse($this->newWsdl('Prado\\Wsdl\\Payments'));
 
-		$this->assertSame('Prado\\Wsdl\\Payments', $dom->documentElement->getAttribute('name'));
-		$this->assertSame(['xmlns:tns: \'urn:Prado\\Wsdl\\Paymentswsdl\' is not a valid URI'], $messages);
+		$this->assertSame(['Prado.Wsdl.PaymentsPortType'], $this->attributes($dom, '//wsdl:portType', 'name'));
+		$this->assertSame(['Prado.Wsdl.PaymentsBinding'], $this->attributes($dom, '//wsdl:binding', 'name'));
+		$this->assertSame(['tns:Prado.Wsdl.PaymentsPortType'], $this->attributes($dom, '//wsdl:binding', 'type'));
+		$this->assertSame(['Prado.Wsdl.PaymentsService'], $this->attributes($dom, '//wsdl:service', 'name'));
+		$this->assertSame(['Prado.Wsdl.PaymentsPort'], $this->attributes($dom, '//wsdl:port', 'name'));
+		$this->assertSame(['tns:Prado.Wsdl.PaymentsBinding'], $this->attributes($dom, '//wsdl:port', 'binding'));
+		$this->assertSame(['urn:Prado.Wsdl.Paymentswsdl#op'], $this->attributes($dom, '//soap:operation', 'soapAction'));
+		$this->assertSame(['urn:Prado.Wsdl.Paymentswsdl', 'urn:Prado.Wsdl.Paymentswsdl'], $this->attributes($dom, '//soap:body', 'namespace'));
+	}
+
+	/**
+	 * @dataProvider documentNameProvider
+	 * @param string $className The class name to map
+	 * @param string $expected The name the document carries
+	 */
+	public function testDocumentNameReplacesEachSeparatorWithADot($className, $expected): void
+	{
+		$this->assertSame($expected, Wsdl::documentName($className));
+	}
+
+	/**
+	 * @return array<string, array<int, string>> The class name and the name the document carries
+	 */
+	public static function documentNameProvider(): array
+	{
+		return [
+			'global' => ['Payments', 'Payments'],
+			'namespaced' => ['App\\Soap\\QuoteProvider', 'App.Soap.QuoteProvider'],
+			'leading separator' => ['\\App\\Soap\\QuoteProvider', 'App.Soap.QuoteProvider'],
+			'empty' => ['', ''],
+			'not a class name' => ['Pay&Go', 'Pay&Go'],
+		];
+	}
+
+	/**
+	 * The parser accepts a namespace URI it finds invalid, warning about it,
+	 * and the warning used to be hidden. The document is refused instead, naming
+	 * what the parser said, and no warning reaches the error handler.
+	 *
+	 * @dataProvider unusableNameProvider
+	 * @param string $name The service name
+	 */
+	public function testANameTheParserObjectsToIsRefusedWithoutAWarning($name): void
+	{
+		$raised = [];
+		set_error_handler(function ($severity, $message) use (&$raised) {
+			$raised[] = $message;
+			return true;
+		});
+
+		try {
+			$this->newWsdl($name)->getWsdl();
+			$this->fail('the document was not refused');
+		} catch (\RuntimeException $e) {
+			$this->assertStringContainsString('"' . $name . '" service does not parse', $e->getMessage());
+			$this->assertStringContainsString('is not a valid URI', $e->getMessage());
+		} finally {
+			restore_error_handler();
+		}
+
+		$this->assertSame([], $raised);
+	}
+
+	/**
+	 * @return array<string, array<int, string>> The service name
+	 */
+	public static function unusableNameProvider(): array
+	{
+		return [
+			'quote' => ['Pay"Go'],
+			'less than' => ['Pay<Go'],
+			'space' => ['Pay Go'],
+		];
 	}
 
 	/**

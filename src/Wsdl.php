@@ -27,10 +27,19 @@ namespace Prado\Wsdl;
 class Wsdl
 {
 	/**
-	 * The name of the service, usually the class name.
+	 * The name of the service, usually the class name. It names the service when
+	 * the document is refused; {@see $name} is what the document carries.
 	 * @var string
 	 */
 	private string $serviceName;
+
+	/**
+	 * The name the document carries for the service, as {@see documentName()}
+	 * maps it. It is written where an NCName or a URI is expected, which a
+	 * namespaced class name is not.
+	 * @var string
+	 */
+	private string $name;
 
 	/**
 	 * The URI the service is found at. An empty URI falls back to the current
@@ -131,7 +140,8 @@ class Wsdl
 	public const STYLE_DOCUMENT = 'document';
 
 	/**
-	 * Creates a new wsdl document.
+	 * Creates a new wsdl document. The service name is usually the class name of
+	 * the provider, and reaches the document as {@see documentName()} maps it.
 	 * @param mixed $name The name of the service, a string, or a value coerced to
 	 * one as interpolation coerced it before the properties carried types
 	 * @param string $serviceUri The URI of the service that handles this WSDL
@@ -148,13 +158,33 @@ class Wsdl
 		// passed something other than a string still gets what it always got.
 		$this->_encoding = (string) $encoding;
 		$this->serviceName = (string) $name;
+		$this->name = self::documentName($this->serviceName);
 		$protocol = (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] !== 'off')) ? 'https://' : 'http://';
 		if ($serviceUri === '') {
 			$serviceUri = $protocol . ($_SERVER['HTTP_HOST'] ?? '') . ($_SERVER['PHP_SELF'] ?? '');
 		}
 		$this->serviceUri = str_replace('&amp;', '&', $serviceUri);
 		$this->types = new \ArrayObject();
-		$this->targetNamespace = 'urn:' . $this->serviceName . 'wsdl';
+		$this->targetNamespace = 'urn:' . $this->name . 'wsdl';
+	}
+
+	/**
+	 * Maps a class name to the name the document carries for it. The service
+	 * name and each complexType name are written as NCNames and into the target
+	 * namespace URN, and a namespace separator is valid in neither. Each
+	 * separator becomes a dot, which both allow, and a leading one is dropped:
+	 * App\Soap\Quote is written as App.Soap.Quote. The full name is kept, so two
+	 * classes sharing a short name do not collide. A class name holds nothing
+	 * else a URI or an NCName refuses, and a global class name is returned as it
+	 * stands, so the document of a global class is unchanged. The generator maps
+	 * a type name the same way, so every tns: reference resolves.
+	 * @param string $className The class name, with or without a leading separator
+	 * @return string The name as the document carries it
+	 * @since 1.2
+	 */
+	public static function documentName($className)
+	{
+		return str_replace('\\', '.', ltrim((string) $className, '\\'));
 	}
 
 	/**
@@ -206,7 +236,8 @@ class Wsdl
 	/**
 	 * Generates the WSDL file into the $this->wsdl variable
 	 * @throws \InvalidArgumentException if the encoding is not an XML encoding name
-	 * @throws \RuntimeException if the generated document does not parse
+	 * @throws \RuntimeException if the generated document does not parse, or the
+	 * parser objects to the target namespace
 	 * @return void
 	 */
 	protected function buildWsdl()
@@ -219,7 +250,7 @@ class Wsdl
 			$encoding = 'encoding="' . $this->_encoding . '"';
 		}
 
-		$name = self::escapeAttribute($this->serviceName);
+		$name = self::escapeAttribute($this->name);
 		$targetNamespace = self::escapeAttribute($this->targetNamespace);
 
 		$xml = '<?xml version="1.0" ' . $encoding . '?>
@@ -243,26 +274,41 @@ class Wsdl
 		$this->addService($dom);
 
 		$this->wsdl = $dom->saveXML();
-
-		// A namespace URI is serialized as it was given, so a service name
-		// carrying a character a URI cannot hold reaches the caller as a document
-		// that no longer parses. Escaping does not reach a namespace declaration.
-		$this->loadOrFail(new \DOMDocument(), $this->wsdl);
 	}
 
 	/**
-	 * Parses a document, and reports the service rather than the parser when it
-	 * does not parse.
+	 * Parses a document, and reports the service rather than the parser when the
+	 * parser objects to it. A namespace URI that is not a URI loads with a
+	 * warning, which is as fatal as a failure: an error handler such as PRADO's
+	 * throws on it, and hiding it hands the caller a document no client accepts.
+	 * The parser keeps its errors here rather than raising them, so nothing
+	 * reaches the error handler, and a document it said anything about is
+	 * refused, naming what it said. Escaping does not reach a namespace
+	 * declaration, so this is the check that keeps such a document from the
+	 * caller.
 	 * @param \DOMDocument $dom The document to parse into
 	 * @param string $xml The document to parse
-	 * @throws \RuntimeException if the document does not parse
+	 * @throws \RuntimeException if the document does not parse, or the parser
+	 * objects to it
 	 * @return void
 	 * @since 1.2
 	 */
 	private function loadOrFail(\DOMDocument $dom, $xml)
 	{
-		if (!@$dom->loadXml($xml)) {
-			throw new \RuntimeException('The wsdl of the "' . $this->serviceName . '" service does not parse. Its name is not usable in a document.');
+		$previous = libxml_use_internal_errors(true);
+		libxml_clear_errors();
+
+		try {
+			$loaded = $dom->loadXML($xml);
+			$errors = libxml_get_errors();
+		} finally {
+			libxml_clear_errors();
+			libxml_use_internal_errors($previous);
+		}
+
+		if (!$loaded || $errors !== []) {
+			$reason = $errors === [] ? '.' : ': ' . trim($errors[0]->message);
+			throw new \RuntimeException('The wsdl of the "' . $this->serviceName . '" service does not parse' . $reason);
 		}
 	}
 
@@ -465,7 +511,7 @@ class Wsdl
 	protected function addPortTypes(\DOMDocument $dom)
 	{
 		$portType = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:portType');
-		$portType->setAttribute('name', $this->serviceName . 'PortType');
+		$portType->setAttribute('name', $this->name . 'PortType');
 
 		$this->definitions->appendChild($portType);
 		foreach ($this->operations as $operation) {
@@ -482,8 +528,8 @@ class Wsdl
 	protected function addBindings(\DOMDocument $dom)
 	{
 		$binding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:binding');
-		$binding->setAttribute('name', $this->serviceName . 'Binding');
-		$binding->setAttribute('type', 'tns:' . $this->serviceName . 'PortType');
+		$binding->setAttribute('name', $this->name . 'Binding');
+		$binding->setAttribute('type', 'tns:' . $this->name . 'PortType');
 
 		$soapBinding = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:binding');
 		$soapBinding->setAttribute('style', $this->bindingStyle);
@@ -506,11 +552,11 @@ class Wsdl
 	protected function addService(\DOMDocument $dom)
 	{
 		$service = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:service');
-		$service->setAttribute('name', $this->serviceName . 'Service');
+		$service->setAttribute('name', $this->name . 'Service');
 
 		$port = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/', 'wsdl:port');
-		$port->setAttribute('name', $this->serviceName . 'Port');
-		$port->setAttribute('binding', 'tns:' . $this->serviceName . 'Binding');
+		$port->setAttribute('name', $this->name . 'Port');
+		$port->setAttribute('binding', 'tns:' . $this->name . 'Binding');
 
 		$soapAddress = $dom->createElementNS('http://schemas.xmlsoap.org/wsdl/soap/', 'soap:address');
 		$soapAddress->setAttribute('location', $this->serviceUri);
@@ -533,7 +579,8 @@ class Wsdl
 
 	/**
 	 * Adds complexTypes to the wsdl
-	 * @param string $type Name of the type
+	 * @param string $type Name of the type, as the document carries it, which for
+	 * a namespaced class is what {@see documentName()} returns
 	 * @param array<int, array<string, mixed>>|string $elements Elements of the type, each an
 	 * associative array of name and type, or an empty string for an array type
 	 * @return void
