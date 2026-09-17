@@ -46,8 +46,10 @@ class WsdlGenerator
 	private static ?WsdlGenerator $instance = null;
 
 	/**
-	 * The complex types to use in the wsdl, indexed by type name. An array type
-	 * holds an empty string, because its element is derived from its name.
+	 * The complex types to use in the wsdl, indexed by the name the document
+	 * carries, which {@see Wsdl::documentName()} derives from the class name. An
+	 * array type holds an empty string, because its element is derived from its
+	 * name.
 	 * @var array<string, array<int, array<string, mixed>>|string>
 	 */
 	private array $types = [];
@@ -176,8 +178,9 @@ class WsdlGenerator
 	 * \@soaptype MyRecord
 	 * \@soaptype MyRecord[]
 	 * </code>
-	 * The class name follows the same grammar as \@param and \@return, so it carries
-	 * no namespace.
+	 * The class name follows the same grammar as \@param and \@return: a global
+	 * class by its name, a namespaced class by its fully qualified name, with or
+	 * without the leading separator.
 	 * @param \ReflectionClass<object> $classReflect The class to read the tags from
 	 * @return void
 	 * @since 1.2
@@ -189,7 +192,7 @@ class WsdlGenerator
 			return;
 		}
 
-		if (preg_match_all('/' . self::TAG_START . 'soaptype\s+(\w+(\[\s*\])?)/mi', $comment, $matches)) {
+		if (preg_match_all('/' . self::TAG_START . 'soaptype\s+([\w\\\\]+(\[\s*\])?)/mi', $comment, $matches)) {
 			foreach ($matches[1] as $type) {
 				$this->convertType(preg_replace('/\s+/', '', $type));
 			}
@@ -220,7 +223,9 @@ class WsdlGenerator
 	}
 
 	/**
-	 * Process a method found in the passed in class.
+	 * Process a method found in the passed in class. A \@param or \@return names
+	 * a global class by its name, or a namespaced class by its fully qualified
+	 * name, with or without the leading separator.
 	 * @param \ReflectionMethod $method The method to process
 	 * @return void
 	 */
@@ -252,13 +257,13 @@ class WsdlGenerator
 			}
 			if ($line[0] == '@') {
 				$gotDesc = true;
-				if (preg_match('/^@param\s+([\w\[\]()]+)\s+\$([\w()]+)\s*(.*)/i', $line, $match)) {
+				if (preg_match('/^@param\s+([\w\\\\\[\]()]+)\s+\$([\w()]+)\s*(.*)/i', $line, $match)) {
 					$param = [];
 					$param['type'] = $this->convertType($match[1]);
 					$param['name'] = $match[2];
 					$param['desc'] = $match[3];
 					$params[] = $param;
-				} elseif (preg_match('/^@return\s+([\w\[\]()]+)\s*(.*)/i', $line, $match)) {
+				} elseif (preg_match('/^@return\s+([\w\\\\\[\]()]+)\s*(.*)/i', $line, $match)) {
 					$gotParams = true;
 					$return['type'] = $this->convertType($match[1]);
 					$return['desc'] = $match[2];
@@ -293,6 +298,11 @@ class WsdlGenerator
 	/**
 	 * Converts from a PHP type into a WSDL type. This is borrowed from
 	 * Cerebral Cortex (let me know and I'll remove asap).
+	 *
+	 * A class is reflected on by the name written, and declared and referred to
+	 * by the name {@see Wsdl::documentName()} derives from it, so a namespaced
+	 * class produces a QName the document can hold. Both come from one name, so
+	 * the reference and the declaration agree.
 	 *
 	 * TODO: date and dateTime
 	 * @param string $type The php type to convert
@@ -331,12 +341,14 @@ class WsdlGenerator
 			default:
 				if (strpos($type, '[]')) {  // if it is an array
 					$className = substr($type, 0, strlen($type) - 2);
-					$type = $className . 'Array';
+					$type = Wsdl::documentName($className) . 'Array';
 					$this->types[$type] = '';
 					$this->convertType($className);
 				} else {
+					$className = $type;
+					$type = Wsdl::documentName($className);
 					if (!isset($this->types[$type])) {
-						$this->extractClassProperties($type);
+						$this->extractClassProperties($className);
 					}
 				}
 				return 'tns:' . $type;
@@ -348,6 +360,8 @@ class WsdlGenerator
 	 * This method extract properties from PHPDoc formatted comments for variables. Unfortunately the reflectionproperty
 	 * class doesn't have a getDocComment method to extract comments about it, so we have to extract the information
 	 * about the variables manually. Thanks heaps to Cristian Losada for implementing this.
+	 * The type is stored under the name the document carries, and a \@var names
+	 * its class as \@param does.
 	 * @param string $className The name of the class
 	 */
 	private function extractClassProperties($className): void
@@ -358,11 +372,12 @@ class WsdlGenerator
 		 * DocComment is available since PHP 5.1
 		 */
 		$reflection = new \ReflectionClass($className);
+		$type = Wsdl::documentName($className);
 		$properties = $reflection->getProperties();
 		foreach ($properties as $property) {
 			$comment = $property->getDocComment();
 			if (self::hasTag($comment, 'soapproperty')) {
-				if (preg_match('/@var\s+([\w\.]+(\[\s*\])?)\s*?\$(.*)$/mi', $comment, $matches)) {
+				if (preg_match('/@var\s+([\w\.\\\\]+(\[\s*\])?)\s*?\$(.*)$/mi', $comment, $matches)) {
 					// support nillable, minOccurs, maxOccurs attributes
 					$nillable = $minOccurs = $maxOccurs = false;
 					if (preg_match('/{(.+)}/', $matches[3], $attr)) {
@@ -386,7 +401,7 @@ class WsdlGenerator
 					$param['nil'] = $nillable;
 					$param['minOc'] = $minOccurs;
 					$param['maxOc'] = $maxOccurs;
-					$this->types[$className][] = $param;
+					$this->types[$type][] = $param;
 
 				}
 			}

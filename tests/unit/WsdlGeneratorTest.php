@@ -2,6 +2,7 @@
 
 namespace Prado\Wsdl\Test\Unit;
 
+use Prado\Wsdl\Test\Unit\Fixtures\QuoteProvider;
 use Prado\Wsdl\Wsdl;
 use Prado\Wsdl\WsdlGenerator;
 use ReflectionClass;
@@ -366,7 +367,88 @@ class WsdlGeneratorTest extends WsdlTestCase
 			['WsdlTestTypeTagProvider'],
 			['WsdlTestNestedProvider'],
 			['WsdlTestDocCommentProvider'],
+			[QuoteProvider::class],
 		];
+	}
+
+	/**
+	 * A namespaced provider used to produce a target namespace holding a
+	 * backslash, which is not a URI. The parser warned, and PRADO's error
+	 * handler turned the warning into an exception, so every namespaced provider
+	 * failed to serve its document. The separator is written as a dot.
+	 */
+	public function testANamespacedProviderProducesADocumentTheParserAccepts(): void
+	{
+		$dom = $this->generate(QuoteProvider::class);
+
+		$this->assertSame('urn:Prado.Wsdl.Test.Unit.Fixtures.QuoteProviderwsdl', $dom->documentElement->getAttribute('targetNamespace'));
+		$this->assertSame('Prado.Wsdl.Test.Unit.Fixtures.QuoteProvider', $dom->documentElement->getAttribute('name'));
+		$this->assertSame(['Prado.Wsdl.Test.Unit.Fixtures.QuoteProviderService'], $this->attributes($dom, '//wsdl:service', 'name'));
+		$this->assertSame(['tns:Prado.Wsdl.Test.Unit.Fixtures.QuoteProviderBinding'], $this->attributes($dom, '//wsdl:port', 'binding'));
+		$this->assertSame(['quote', 'history'], $this->attributes($dom, '//wsdl:portType/wsdl:operation', 'name'));
+	}
+
+	/**
+	 * A type named by its fully qualified name is reflected on as such, and
+	 * declared under the dotted form of that name, which is what each reference
+	 * to it carries.
+	 */
+	public function testANamespacedTypeIsDeclaredUnderItsDottedName(): void
+	{
+		$dom = $this->generate(QuoteProvider::class);
+		$quote = 'Prado.Wsdl.Test.Unit.Fixtures.Quote';
+		$money = 'Prado.Wsdl.Test.Unit.Fixtures.Money';
+
+		$this->assertEqualsCanonicalizing([$money, $quote . 'Array', $quote], $this->complexTypes($dom));
+		$this->assertSame(['symbol' => 'xsd:string', 'limit' => 'tns:' . $money], $this->parts($dom, 'quoteRequest'));
+		$this->assertSame(['return' => 'tns:' . $quote], $this->parts($dom, 'quoteResponse'));
+		$this->assertSame(['return' => 'tns:' . $quote . 'Array'], $this->parts($dom, 'historyResponse'));
+
+		$price = $this->element($dom, "//xsd:complexType[@name='" . $quote . "']/*/xsd:element[@name='price']");
+		$this->assertSame('tns:' . $money, $price->getAttribute('type'));
+
+		$element = $this->element($dom, "//xsd:complexType[@name='" . $quote . "Array']/xsd:sequence/xsd:element");
+		$this->assertSame($quote, $element->getAttribute('name'));
+		$this->assertSame('tns:' . $quote, $element->getAttribute('type'));
+	}
+
+	/**
+	 * A leading separator names the same class, so the type it names is declared
+	 * once, however the tags spell it.
+	 */
+	public function testALeadingSeparatorNamesTheSameType(): void
+	{
+		$types = $this->complexTypes($this->generate(QuoteProvider::class));
+		$this->assertCount(1, array_keys($types, 'Prado.Wsdl.Test.Unit.Fixtures.Money'));
+	}
+
+	public function testNoNameInANamespacedDocumentHoldsASeparator(): void
+	{
+		$dom = $this->generate(QuoteProvider::class, 'http://example.com/soap', Wsdl::STYLE_DOCUMENT);
+		$this->assertStringNotContainsString('\\', $dom->saveXML());
+	}
+
+	/**
+	 * A client written against a global provider, or a cached copy of its
+	 * document, reads the document 1.1 produced. The mapping touches nothing
+	 * but a separator, so the document of a global class is unchanged to the
+	 * byte.
+	 *
+	 * @dataProvider styleProvider
+	 * @param string $style The binding style to generate
+	 */
+	public function testTheDocumentOfAGlobalProviderIsUnchanged($style): void
+	{
+		$expected = file_get_contents(__DIR__ . '/Fixtures/WsdlTestTypeTagProvider.' . $style . '.wsdl');
+		$this->assertSame($expected, WsdlGenerator::generate('WsdlTestTypeTagProvider', 'http://example.com/soap', 'UTF-8', $style));
+	}
+
+	/**
+	 * @return array<string, array<int, string>> The binding style
+	 */
+	public static function styleProvider(): array
+	{
+		return ['rpc' => [Wsdl::STYLE_RPC], 'document' => [Wsdl::STYLE_DOCUMENT]];
 	}
 
 	/**
